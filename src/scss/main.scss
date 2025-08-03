@@ -1,0 +1,221 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+@import 'vuestic';
+@import 'icon-fonts/index';
+
+/* Heading Styles */
+h1 {
+  font-weight: 700;
+  font-size: 24px;
+  padding-block: 6px;
+  margin-block: 20px;
+}
+
+h2 {
+  font-size: 18px;
+  font-weight: 700;
+  padding-block: 5px;
+  margin-bottom: 5px;
+}
+
+h3 {
+  font-size: 16px;
+  margin-bottom: 3px;
+}
+
+h4 {
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+
+h5 {
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+
+h6 {
+  font-size: 10px;
+  margin-bottom: 3px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+}
+
+th,
+td {
+  padding: 10px;
+  border: 1px solid #ccc;
+}
+
+blockquote {
+  margin: 20px 0;
+  padding: 10px 15px;
+  font-style: italic;
+  color: #555;
+  border-left: 5px solid #ff9800;
+  border-radius: 5px;
+  background-color: #f9f9f9;
+}
+
+/* Preformatted Text Styles */
+pre {
+  position: relative;
+  margin: 10px 0;
+  padding: 2px;
+  background-color: #3c3a3a;
+  border: 1px solid #787272;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+a {
+  color: #007bff;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+
+a:active,
+a:focus {
+  outline: none;
+}
+
+a:visited {
+  color: #0056b3;
+}
+
+a:hover {
+  color: #0056b3; /* Fixed duplicate hover rule */
+}
+
+/* Code Styles */
+code {
+  font-family: 'Courier New', Courier, monospace;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+ul {
+  margin: 0;
+  padding: 0.5rem 1.5rem;
+}
+
+li {
+  margin-bottom: 0.3125rem;
+  padding-left: 1rem;
+}
+
+ol {
+  margin-left: 20px;
+}
+
+body {
+  @apply text-regularMedium;
+  --va-checkbox-font-size: 0.875rem;
+  --va-card-box-shadow: none;
+  --va-card-padding: 1rem;
+  --va-font-family: 'Inter', sans-serif;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: monospace;
+  font-size: 1em;
+}
+
+iframe {
+  max-width: 100%;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-title {
+  @apply text-[32px] md:text-5xl font-bold leading-9 md:leading-[56px] max-sm:mt-6 mb-6 md:mb-4;
+}
+
+.h1 {
+  @apply text-[32px] md:text-5xl font-bold leading-9 md:leading-[56px] max-sm:mt-6 mb-6 md:mb-4;
+}
+
+.h3,
+.page-sub-title {
+  @apply text-2xl font-bold leading-[30px];
+}
+
+.h5 {
+  @apply font-bold leading-tight;
+}
+
+.block-title {
+  @apply text-2xl font-bold mb-2;
+}
+
+.pricing-plan-card-title {
+  @apply text-[28px] md:text-[32px] leading-10 font-bold;
+}
+
+.text-regular-small {
+  font-size: 0.8125rem;
+  line-height: 1rem;
+}
+
+.va-input-wrapper {
+  text-align: left;
+  border: 1px solid #9ca3af;
+  border-radius: 4px;
+  padding: 2px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.va-input-wrapper:hover {
+  border-color: #9ca3af;
+}
+
+.va-input-wrapper:focus-within {
+  border-color: #787d87 !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.loadingSpiner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100%;
+}
+
+.complete-lesson {
+  text-decoration: line-through;
+  color: #555;
+  font-weight: bold;
+}
+
+/* Overlay Styles */
+.va-layout__area--overlay {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  z-index: 1999 !important;
+  transition: opacity 0.3s ease !important;
+  pointer-events: auto !important;
+}
+
+/* Hide overlay when sidebar is not visible */
+.va-layout__area--overlay:not(.va-sidebar--visible ~ *) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Ensure sidebar appears above overlay */
+.va-sidebar {
+  z-index: 2000 !important;
+}

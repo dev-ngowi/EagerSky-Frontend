@@ -1,0 +1,377 @@
+<template>
+  <div class="p-4">
+    <h2 class="text-xl font-bold mb-4">{{ $t('Add New Maintenance Request', 'Add New Maintenance Request') }}</h2>
+    <form @submit.prevent="submitForm">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <VaSelect
+            v-model="form.property_id"
+            label="Property"
+            placeholder="Select property"
+            :options="properties"
+            :error="!!errors.property_id"
+            :error-messages="errors.property_id ? [errors.property_id] : []"
+            value-by="value"
+            text-by="text"
+            :disabled="isSubmitting || loadingOptions"
+            :loading="loadingOptions"
+            required
+          />
+        </div>
+
+        <div>
+          <VaSelect
+            v-model="form.user_id"
+            label="User"
+            placeholder="Select user"
+            :options="users"
+            :error="!!errors.user_id"
+            :error-messages="errors.user_id ? [errors.user_id] : []"
+            value-by="value"
+            text-by="text"
+            :disabled="isSubmitting || loadingOptions"
+            :loading="loadingOptions"
+            required
+          />
+        </div>
+
+        <div>
+          <VaSelect
+            v-model="form.contractor_id"
+            label="Contractor (Optional)"
+            placeholder="Select contractor"
+            :options="contractors"
+            :error="!!errors.contractor_id"
+            :error-messages="errors.contractor_id ? [errors.contractor_id] : []"
+            value-by="value"
+            text-by="text"
+            :disabled="isSubmitting || loadingOptions"
+            :loading="loadingOptions"
+          />
+        </div>
+
+        <div class="md:col-span-2">
+          <VaTextarea
+            v-model="form.description"
+            label="Description"
+            placeholder="Enter maintenance request description"
+            :error="!!errors.description"
+            :error-messages="errors.description ? [errors.description] : []"
+            :disabled="isSubmitting"
+            required
+            min-rows="4"
+          />
+        </div>
+
+        <div>
+          <VaSelect
+            v-model="form.status"
+            label="Status"
+            placeholder="Select status"
+            :options="statusOptions"
+            :error="!!errors.status"
+            :error-messages="errors.status ? [errors.status] : []"
+            value-by="value"
+            text-by="text"
+            :disabled="isSubmitting"
+            required
+          />
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-2 mt-4">
+        <VaButton color="secondary" :disabled="isSubmitting" @click="resetForm">Cancel</VaButton>
+        <VaButton color="#00A3E0" type="submit" :disabled="isSubmitting">
+          <div v-if="isSubmitting" class="spinner" />
+          <span v-else>Submit</span>
+        </VaButton>
+      </div>
+    </form>
+  </div>
+</template>
+
+<script lang="ts">
+import { defineComponent, reactive, ref, onMounted } from 'vue';
+import makeRequest from '../../../../services/makeRequest';
+import Swal from 'sweetalert2';
+import type { FormData, Errors, Payload } from '../../../../types/maintenanceRequest';
+
+export default defineComponent({
+  name: 'MaintenanceRequestForm',
+  emits: ['submit', 'close'],
+  setup(_, { emit }) {
+    const form = reactive<FormData>({
+      property_id: null,
+      user_id: null,
+      contractor_id: null,
+      description: '',
+      status: '',
+    });
+
+    const errors = reactive<Errors>({
+      property_id: '',
+      user_id: '',
+      contractor_id: '',
+      description: '',
+      status: '',
+    });
+
+    const isSubmitting = ref(false);
+
+    const statusOptions = [
+      { value: 'pending', text: 'Pending' },
+      { value: 'in_progress', text: 'In Progress' },
+      { value: 'completed', text: 'Completed' },
+    ];
+
+    const properties = ref<{ value: number; text: string }[]>([]);
+    const users = ref<{ value: number; text: string }[]>([]);
+    const contractors = ref<{ value: number | null; text: string }[]>([]);
+    const loadingOptions = ref<boolean>(false);
+
+    const fetchProperties = async () => {
+      loadingOptions.value = true;
+      try {
+        const response = await makeRequest({
+          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/properties`,
+          method: 'get',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+            Accept: 'application/json',
+          },
+          params: { per_page: 1000 },
+        });
+        if (response.status === 200) {
+          properties.value = response.data.data.map((property: any) => ({
+            value: property.id,
+            text: property.title || `Property ${property.id}`,
+          }));
+          if (properties.value.length === 0) {
+            Swal.fire({
+              title: 'Info',
+              text: 'No properties found. Please add properties first.',
+              icon: 'info',
+              position: 'top-end',
+              toast: true,
+              showConfirmButton: false,
+              timer: 3000,
+            });
+          }
+        } else {
+          throw new Error(response.data?.message || 'Failed to fetch properties.');
+        }
+      } catch (error: any) {
+        Swal.fire({
+          title: 'Error!',
+          text: error.response?.data?.message || 'Failed to fetch properties.',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+      } finally {
+        loadingOptions.value = false;
+      }
+    };
+
+    const fetchUsers = async () => {
+      loadingOptions.value = true;
+      try {
+        const response = await makeRequest({
+          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/users`,
+          method: 'get',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+            Accept: 'application/json',
+          },
+          params: { per_page: 1000 },
+        });
+        if (response.status === 200) {
+          users.value = response.data.data.map((user: any) => ({
+            value: user.id,
+            text: user.first_name || user.last_name
+              ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
+              : `User ${user.id}`,
+          }));
+          if (users.value.length === 0) {
+            Swal.fire({
+              title: 'Info',
+              text: 'No users found. Please add users first.',
+              icon: 'info',
+              position: 'top-end',
+              toast: true,
+              showConfirmButton: false,
+              timer: 3000,
+            });
+          }
+        } else {
+          throw new Error(response.data?.message || 'Failed to fetch users.');
+        }
+      } catch (error: any) {
+        Swal.fire({
+          title: 'Error!',
+          text: error.response?.data?.message || 'Failed to fetch users.',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+      } finally {
+        loadingOptions.value = false;
+      }
+    };
+
+    const fetchContractors = async () => {
+      loadingOptions.value = true;
+      try {
+        const response = await makeRequest({
+          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/contractors`,
+          method: 'get',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+            Accept: 'application/json',
+          },
+          params: { per_page: 1000 },
+        });
+        if (response.status === 200) {
+          contractors.value = [
+            { value: null, text: 'None' },
+            ...response.data.data.map((contractor: any) => ({
+              value: contractor.id,
+              text: contractor.name || `Contractor ${contractor.id}`,
+            })),
+          ];
+          if (response.data.data.length === 0) {
+            Swal.fire({
+              title: 'Info',
+              text: 'No contractors found. You can still proceed without selecting a contractor.',
+              icon: 'info',
+              position: 'top-end',
+              toast: true,
+              showConfirmButton: false,
+              timer: 3000,
+            });
+          }
+        } else {
+          throw new Error(response.data?.message || 'Failed to fetch contractors.');
+        }
+      } catch (error: any) {
+        Swal.fire({
+          title: 'Error!',
+          text: error.response?.data?.message || 'Failed to fetch contractors.',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+      } finally {
+        loadingOptions.value = false;
+      }
+    };
+
+    const submitForm = async () => {
+      Object.keys(errors).forEach((key) => (errors[key as keyof Errors] = ''));
+
+      if (!form.property_id) errors.property_id = 'Property is required';
+      if (!form.user_id) errors.user_id = 'User is required';
+      if (!form.description || form.description.length < 10)
+        errors.description = 'Description must be at least 10 characters';
+      if (!form.status) errors.status = 'Status is required';
+
+      if (Object.values(errors).some((e) => e)) {
+        isSubmitting.value = false;
+        return;
+      }
+
+      isSubmitting.value = true;
+      try {
+        const payload: Payload = { ...form };
+        emit('submit', payload, 'add');
+      } catch (err: any) {
+        console.error('Submission error:', err.response?.data || err);
+        Swal.fire({
+          title: 'Error!',
+          text: err.response?.data?.message || 'Failed to submit.',
+          icon: 'error',
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 3000,
+        });
+      } finally {
+        isSubmitting.value = false;
+      }
+    };
+
+    const resetForm = () => {
+      form.property_id = null;
+      form.user_id = null;
+      form.contractor_id = null;
+      form.description = '';
+      form.status = '';
+      Object.keys(errors).forEach((key) => (errors[key as keyof Errors] = ''));
+      emit('close');
+    };
+
+    onMounted(async () => {
+      await Promise.all([fetchProperties(), fetchUsers(), fetchContractors()]);
+    });
+
+    return {
+      form,
+      errors,
+      statusOptions,
+      isSubmitting,
+      submitForm,
+      resetForm,
+      properties,
+      users,
+      contractors,
+      loadingOptions,
+    };
+  },
+});
+</script>
+
+<style scoped>
+.grid {
+  display: grid;
+}
+.grid-cols-1 {
+  grid-template-columns: 1fr;
+}
+.md\:grid-cols-2 {
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.gap-4 {
+  gap: 1rem;
+}
+.mb-4 {
+  margin-bottom: 1rem;
+}
+.mt-4 {
+  margin-top: 1rem;
+}
+.space-x-2 > :not(:last-child) {
+  margin-right: 0.5rem;
+}
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #fff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 0.5rem;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>

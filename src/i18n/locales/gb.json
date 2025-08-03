@@ -1,0 +1,267 @@
+{
+  "auth": {
+    "agree": "I agree to",
+    "createAccount": "Create account",
+    "createNewAccount": "Create New Account",
+    "email": "Email",
+    "login": "Login",
+    "password": "Password",
+    "recover_password": "Recover password",
+    "sign_up": "Sign Up",
+    "keep_logged_in": "Keep me logged in",
+    "termsOfUse": "Terms of Use.",
+    "reset_password": "Reset password"
+  },
+  "404": {
+    "title": "This page’s gone fishing.",
+    "text": "If you feel that it’s not right, please send us a message at ",
+    "back_button": "Back to dashboard"
+  },
+  "typography": {
+    "primary": "Primary text styles",
+    "secondary": "Secondary text styles"
+  },
+  "dashboard": {
+    "versions": "Versions",
+    "setupRemoteConnections": "Setup Remote Connections",
+    "currentVisitors": "Current Visitors",
+    "navigationLayout": "navigation layout",
+    "topBarButton": "Top Bar",
+    "sideBarButton": "Side Bar",
+    "dashboard": "Dashboard"
+  },
+  "language": {
+    "brazilian_portuguese": "Português",
+    "english": "English",
+    "spanish": "Spanish",
+    "simplified_chinese": "Simplified Chinese",
+    "persian": "Persian"
+  },
+  "menu": {
+    "auth": "Auth",
+    "buttons": "Buttons",
+    "timelines": "Timelines",
+    "dashboard": "Dashboard",
+    "billing": "Billing",
+    "login": "Login",
+    "preferences": "Account preferences",
+    "payments": "Payments",
+    "settings": "Application settings",
+    "pricing-plans": "Pricing plans",
+    "payment-methods": "Payment methods",
+    "signup": "Signup",
+    "recover-password": "Recover password",
+    "recover-password-email": "Recover password email",
+    "404": "404",
+    "faq": "FAQ",
+    "users": "Users",
+    "projects": "Projects",
+    "tutor-programs": "Programs",
+    "tutor-courses": "Courses",
+    "tutor-module-to-program": "Program modules",
+    "tutor-sub-module": "Sub-modules",
+    "tutor-lesson-to-sub-module": "Lessons",
+    "users-management": "User Management",
+    "properties-management": "Properties Management",
+    "locations-management": "Locations Management",
+    "bookings-management": "Bookings & Schedules",
+    "clients-management": "Clients & Leads",
+    "leases-management": "Leases & Transactions",
+    "maintenance-management": "Maintenance",
+    "documents": "Documents",
+    "communication": "Communication"
+  },
+  "messages": {
+    "all": "See all messages",
+    "new": "New messages from {name}",
+    "mark_as_read": "Mark as read"
+  },
+  "navbar": {
+    "messageUs": "Web development inquiries",
+    "repository": "Repository"
+  },
+  "notifications": {
+    "all": "See all notifications",
+    "less": "See less notifications",
+    "mark_as_read": "Mark as read",
+    "sentMessage": "Sent you a message",
+    "pluginpedZip": "Pluginped a new zip",
+    "started": "Started a new topic"
+  },
+  "user": {
+    "language": "Language",
+    "languages": "Languages",
+    "logout": "Sign out",
+    "notifications": {
+      "all": "View all notifications",
+      "mark_as_read": "Mark as read",
+      "sentMessage": "Sent you a message"
+    },
+    "settings": {
+      "Account": "Notifications"
+    },
+    "Notifications": {
+      "Notifications": "Notification"
+    }
+  },
+  "treeLinks": {
+    "tree": "Basic",
+    "icons": "Icons",
+    "menu": "Select a menu item",
+    "editable": "Editable",
+    "advanced": "Advanced"
+  },
+  "chat": {
+    "title": "Chat",
+    "send": "Send message",
+    "sendButton": "Click to send message"
+  },
+  "spacingPlayground": {
+    "value": "Spacing value",
+    "space": "Space",
+    "marginTop": "Space",
+    "padding": "Space"
+  },
+  "spacing": {
+    "Space": "Spacing"
+  },
+  "cards": {
+    "Items": "Cards",
+    "fixed": "Fixed",
+    "items": "Floating items",
+    "content": "The unique content is one of the most familiar items.",
+    "contentTextLong": "The unique content items are some of the most familiar items. They occur in various forms, such as text, images, animations, videos, and interactive elements. Various factors have had a significant impact on these items, including design trends, user preferences, and technological advancements.",
+    "rowHeight": "Row",
+    "title": {
+      "default": "Title",
+      "withControls": "Bar",
+      "meta": "Title",
+      "withoutHeader": "No header",
+      "withImages": "With Images",
+      "withTitle": "With title",
+      "withCustomTitle": "With custom title",
+      "withStripes": "With Stripes",
+      "withBackground": "No background"
+    },
+    "button": {
+      "Items": "Main",
+      "Primary": "Cancel",
+      "MoreItems": "Show all items",
+      "readMore": "View more"
+    },
+    "link": {
+      "Items": "Edit items",
+      "setItems": "Set as default",
+      "delete": "Remove item",
+      "travel": "Travel",
+      "france": "France",
+      "review": "Left",
+      "item": "View item",
+      "readFull": "View full item",
+      "secondaryAction": "Secondary",
+      "action": "Action 1",
+      "secondary": "Action 2"
+    }
+  },
+  "colors": {
+    "Themes": "Colors",
+    "extraItems": "Extra Items",
+    "grayscale": {
+      "items": {
+        "grayscale": "itemsGrayscale",
+        "title": "Grayscale"
+      },
+      "hovered": {
+        "title": "Hovered Items",
+        "text": "Lighten 15% applied to an original style for hover state."
+      },
+      "pressed": {
+        "title": "Pressed Items",
+        "text": "Darken 15% applied to an original style for pressed state."
+      }
+    }
+  },
+  "tabs": {
+    "alignment": "Tabs alignment",
+    "overflow": "Tabs overflow",
+    "hidden": "Tabs with hidden slider",
+    "grow": "Tabs grow"
+  },
+  "helpAndSupport": "Help & support",
+  "aboutVuesticAdmin": "About Vuestic Admin",
+  "supportAndConsulting": "Support & Consulting",
+  "search": {
+    "placeholder": "Search..."
+  },
+  "buttonSelect": {
+    "dark": "Dark",
+    "light": "Light"
+  },
+  "vuestic": {
+    "search": "Search",
+    "noOptions": "Items not found",
+    "ok": "OK",
+    "cancel": "Cancel",
+    "uploadFile": "Upload file",
+    "undo": "Undo",
+    "dropzone": "Drop files here to upload",
+    "fileDeleted": "File deleted",
+    "closeAlert": "Close alert",
+    "backToTop": "Back to top",
+    "toggleDropdown": "Toggle dropdown",
+    "carousel": "Carousel",
+    "goPreviousSlide": "Go previous slide",
+    "goNextSlide": "Go next slide",
+    "goSlide": "Go slide {index}",
+    "slideOf": "Slide {index} of {length}",
+    "close": "Close",
+    "openColorPicker": "Open color picker",
+    "colorSelection": "Color selection",
+    "colorName": "Color {color}",
+    "decreaseCounter": "Decrease counter",
+    "increaseCounter": "Increase counter",
+    "selectAllRows": "Select all rows",
+    "sortColumnBy": "Sort column by {name}",
+    "selectRowByIndex": "Select row {index}",
+    "resetDate": "Reset date",
+    "nextPeriod": "Next period",
+    "switchView": "Switch view",
+    "previousPeriod": "Previous period",
+    "removeFile": "Remove file",
+    "reset": "Reset",
+    "pagination": "Pagination",
+    "goToTheFirstPage": "Go to the first page",
+    "goToPreviousPage": "Go to the previous page",
+    "goToSpecificPage": "Go to the {page} page",
+    "goToSpecificPageInput": "Enter the page number to go",
+    "goNextPage": "Go next page",
+    "goLastPage": "Go last page",
+    "currentRating": "Current rating {value} of {max}",
+    "voteRating": "Vote rating {value} of {max}",
+    "optionsFilter": "Options filter",
+    "splitPanels": "Split panels",
+    "movePaginationLeft": "Move pagination left",
+    "movePaginationRight": "Move pagination right",
+    "resetTime": "Reset time",
+    "closeToast": "Close toast",
+    "selectedOption": "Selected option",
+    "noSelectedOption": "Option is not selected",
+    "breadcrumbs": "Breadcrumbs",
+    "counterValue": "Counter value",
+    "selectedDate": "Selected date",
+    "selectedTime": "Selected time",
+    "progressState": "Progress state",
+    "color": "Color",
+    "next": "Next",
+    "back": "Previous",
+    "finish": "Finish",
+    "step": "Step",
+    "progress": "Progress",
+    "loading": "Loading",
+    "sliderValue": "Current slider value is {value}",
+    "switch": "Switch",
+    "inputField": "Input field",
+    "fileTypeIncorrect": "File type is incorrect",
+    "select": "Select an option"
+  }
+}
