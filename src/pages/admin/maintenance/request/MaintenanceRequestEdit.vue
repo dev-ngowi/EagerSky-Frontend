@@ -35,21 +35,6 @@
           />
         </div>
 
-        <div class="mb-4">
-          <VaSelect
-            v-model="form.contractor_id"
-            label="Contractor (Optional)"
-            placeholder="Select contractor"
-            :options="contractors"
-            :error="!!errors.contractor_id"
-            :error-messages="errors.contractor_id ? [errors.contractor_id] : []"
-            value-by="value"
-            text-by="text"
-            :disabled="isSubmitting || loadingOptions"
-            :loading="loadingOptions"
-          />
-        </div>
-
         <div class="mb-4 md:col-span-2">
           <VaTextarea
             v-model="form.description"
@@ -109,7 +94,6 @@ export default defineComponent({
     const form = reactive<FormData>({
       property_id: null,
       user_id: null,
-      contractor_id: null,
       description: '',
       status: '',
     });
@@ -117,14 +101,12 @@ export default defineComponent({
     const errors = reactive<Errors>({
       property_id: '',
       user_id: '',
-      contractor_id: '',
       description: '',
       status: '',
     });
 
     const properties = ref<{ value: number; text: string }[]>([]);
     const users = ref<{ value: number; text: string }[]>([]);
-    const contractors = ref<{ value: number | null; text: string }[]>([]);
     const loadingOptions = ref<boolean>(false);
     const isSubmitting = ref<boolean>(false);
 
@@ -137,7 +119,6 @@ export default defineComponent({
     const initializeForm = () => {
       form.property_id = props.maintenanceRequest.property_id !== null ? Number(props.maintenanceRequest.property_id) : null;
       form.user_id = props.maintenanceRequest.user_id !== null ? Number(props.maintenanceRequest.user_id) : null;
-      form.contractor_id = props.maintenanceRequest.contractor_id !== null ? Number(props.maintenanceRequest.contractor_id) : null;
       form.description = props.maintenanceRequest.description || '';
       form.status = props.maintenanceRequest.status || '';
     };
@@ -236,61 +217,11 @@ export default defineComponent({
       }
     };
 
-    const fetchContractors = async () => {
-      loadingOptions.value = true;
-      try {
-        const response = await makeRequest({
-          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/contractors`,
-          method: 'get',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
-            Accept: 'application/json',
-          },
-          params: { per_page: 1000 },
-        });
-        if (response.status === 200) {
-          contractors.value = [
-            { value: null, text: 'None' },
-            ...response.data.data.map((contractor: any) => ({
-              value: contractor.id,
-              text: contractor.name || `Contractor ${contractor.id}`,
-            })),
-          ];
-          if (response.data.data.length === 0) {
-            Swal.fire({
-              title: 'Info',
-              text: 'No contractors found. You can still proceed without selecting a contractor.',
-              icon: 'info',
-              position: 'top-end',
-              toast: true,
-              showConfirmButton: false,
-              timer: 3000,
-            });
-          }
-        } else {
-          throw new Error(response.data?.message || 'Failed to fetch contractors.');
-        }
-      } catch (error: any) {
-        Swal.fire({
-          title: 'Error!',
-          text: error.response?.data?.message || 'Failed to fetch contractors.',
-          icon: 'error',
-          position: 'top-end',
-          toast: true,
-          showConfirmButton: false,
-          timer: 3000,
-        });
-      } finally {
-        loadingOptions.value = false;
-      }
-    };
-
     const validate = () => {
       errors.property_id = form.property_id ? '' : 'Property is required';
       errors.user_id = form.user_id ? '' : 'User is required';
       errors.description = form.description && form.description.length >= 10 ? '' : 'Description must be at least 10 characters';
       errors.status = form.status ? '' : 'Status is required';
-      errors.contractor_id = '';
 
       return !Object.values(errors).some((e) => e);
     };
@@ -306,7 +237,6 @@ export default defineComponent({
           id: props.maintenanceRequest.id,
           property_id: form.property_id,
           user_id: form.user_id,
-          contractor_id: form.contractor_id,
           description: form.description,
           status: form.status,
         };
@@ -335,7 +265,7 @@ export default defineComponent({
 
     onMounted(async () => {
       initializeForm();
-      await Promise.all([fetchProperties(), fetchUsers(), fetchContractors()]);
+      await Promise.all([fetchProperties(), fetchUsers()]);
     });
 
     return {
@@ -343,7 +273,6 @@ export default defineComponent({
       errors,
       properties,
       users,
-      contractors,
       loadingOptions,
       isSubmitting,
       statusOptions,

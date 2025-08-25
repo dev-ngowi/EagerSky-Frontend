@@ -153,11 +153,11 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
-import { usePropertyStore } from '../../../../stores/propertyStore'
-import { FormData, Errors, Payload } from '../../../../types/property'
-import makeRequest from '../../../../services/makeRequest'
-import Swal from 'sweetalert2'
+import { defineComponent } from 'vue';
+import { usePropertyStore } from '../../../../stores/propertyStore';
+import { FormData, Errors, Payload } from '../../../../types/property';
+import makeRequest from '../../../../services/makeRequest';
+import Swal from 'sweetalert2';
 
 export default defineComponent({
   name: 'PropertyForm',
@@ -165,8 +165,8 @@ export default defineComponent({
     close: null,
   },
   setup() {
-    const propertyStore = usePropertyStore()
-    return { propertyStore }
+    const propertyStore = usePropertyStore();
+    return { propertyStore };
   },
   data() {
     return {
@@ -183,6 +183,7 @@ export default defineComponent({
         status: '',
         list_date: '',
         branch_id: null,
+        team_id: null, // Set team_id to null
         is_featured: false,
       } as FormData,
       errors: {
@@ -198,6 +199,7 @@ export default defineComponent({
         status: '',
         list_date: '',
         branch_id: '',
+        team_id: '', // Included team_id
         is_featured: '',
       } as Errors,
       isSubmitting: false,
@@ -205,45 +207,45 @@ export default defineComponent({
       isLoadingLocations: true,
       isLoadingBranches: true,
       statusOptions: [
-        { value: 'available', text: 'Available' },
         { value: 'sold', text: 'Sold' },
         { value: 'pending', text: 'Pending' },
-        { value: 'rented', text: 'Rented' },
+        { value: 'for_rent', text: 'For Rent' },
+        { value: 'for_sale', text: 'For Sale' },
       ],
-    }
+    };
   },
   computed: {
     categories() {
-      console.log('Raw categories from store:', this.propertyStore.categories)
+      console.log('Raw categories from store:', this.propertyStore.categories);
       return this.propertyStore.categories.map(category => ({
         value: category.id,
         text: category.name || `Category ${category.id}`,
-      }))
+      }));
     },
     locations() {
-      console.log('Raw locations from store:', this.propertyStore.locations)
+      console.log('Raw locations from store:', this.propertyStore.locations);
       return this.propertyStore.locations.map(location => ({
         value: location.id,
         text: `${location.street || 'N/A'}, ${location.city || 'N/A'}, ${location.country || 'N/A'}`,
-      }))
+      }));
     },
     branches() {
-      console.log('Raw branches from store:', this.propertyStore.branches)
+      console.log('Raw branches from store:', this.propertyStore.branches);
       return this.propertyStore.branches.map(branch => ({
         value: branch.id,
         text: branch.name || `Branch ${branch.id}`,
-      }))
+      }));
     },
   },
   async mounted() {
     try {
       await Promise.all([
-        this.propertyStore.getCategories().then(() => { this.isLoadingCategories = false }),
-        this.propertyStore.getLocations().then(() => { this.isLoadingLocations = false }),
-        this.propertyStore.getBranches().then(() => { this.isLoadingBranches = false }),
-      ])
+        this.propertyStore.getCategories().then(() => { this.isLoadingCategories = false; }),
+        this.propertyStore.getLocations().then(() => { this.isLoadingLocations = false; }),
+        this.propertyStore.getBranches().then(() => { this.isLoadingBranches = false; }),
+      ]);
     } catch (error) {
-      console.error('Error fetching dropdown data:', error)
+      console.error('Error fetching dropdown data:', error);
       Swal.fire({
         title: 'Error!',
         text: 'Failed to load dropdown data.',
@@ -252,7 +254,7 @@ export default defineComponent({
         toast: true,
         showConfirmButton: false,
         timer: 3000,
-      })
+      });
     }
   },
   methods: {
@@ -270,31 +272,32 @@ export default defineComponent({
         status: '',
         list_date: '',
         branch_id: '',
+        team_id: '', // Included team_id
         is_featured: '',
-      }
+      };
 
-      if (!this.form.title) this.errors.title = 'Title is required'
-      if (!this.form.category_id) this.errors.category_id = 'Category is required'
-      if (!this.form.location_id) this.errors.location_id = 'Location is required'
-      if (this.form.price && this.form.price < 0) this.errors.price = 'Price cannot be negative'
-      if (this.form.bedrooms && this.form.bedrooms < 0) this.errors.bedrooms = 'Bedrooms cannot be negative'
-      if (this.form.bathrooms && this.form.bathrooms < 0) this.errors.bathrooms = 'Bathrooms cannot be negative'
-      if (this.form.area_sqft && this.form.area_sqft < 0) this.errors.area_sqft = 'Area cannot be negative'
+      if (!this.form.title) this.errors.title = 'Title is required';
+      if (!this.form.category_id) this.errors.category_id = 'Category is required';
+      if (!this.form.location_id) this.errors.location_id = 'Location is required';
+      if (this.form.price && this.form.price < 0) this.errors.price = 'Price cannot be negative';
+      if (this.form.bedrooms && this.form.bedrooms < 0) this.errors.bedrooms = 'Bedrooms cannot be negative';
+      if (this.form.bathrooms && this.form.bathrooms < 0) this.errors.bathrooms = 'Bathrooms cannot be negative';
+      if (this.form.area_sqft && this.form.area_sqft < 0) this.errors.area_sqft = 'Area cannot be negative';
       if (this.form.year_built && (this.form.year_built < 1900 || this.form.year_built > new Date().getFullYear())) {
-        this.errors.year_built = `Year built must be between 1900 and ${new Date().getFullYear()}`
+        this.errors.year_built = `Year built must be between 1900 and ${new Date().getFullYear()}`;
       }
       if (this.form.list_date && !this.isValidDate(this.form.list_date)) {
-        this.errors.list_date = 'Please enter a valid date'
+        this.errors.list_date = 'Please enter a valid date';
       }
       if (this.form.description && this.form.description.length > 1000) {
-        this.errors.description = 'Description must not exceed 1000 characters'
+        this.errors.description = 'Description must not exceed 1000 characters';
       }
 
       if (Object.values(this.errors).some(error => error)) {
-        return
+        return;
       }
 
-      this.isSubmitting = true
+      this.isSubmitting = true;
       try {
         const payload: Payload = {
           title: this.form.title,
@@ -309,8 +312,9 @@ export default defineComponent({
           status: this.form.status || null,
           list_date: this.form.list_date || null,
           branch_id: this.form.branch_id || null,
+          team_id: this.form.team_id || null, // Included team_id
           is_featured: this.form.is_featured,
-        }
+        };
 
         await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/properties`,
@@ -320,7 +324,7 @@ export default defineComponent({
             Accept: 'application/json',
           },
           data: payload,
-        })
+        });
 
         Swal.fire({
           title: 'Success!',
@@ -330,12 +334,12 @@ export default defineComponent({
           toast: true,
           showConfirmButton: false,
           timer: 3000,
-        })
-        this.$emit('close')
-        this.resetForm()
+        });
+        this.$emit('close');
+        this.resetForm();
       } catch (error: any) {
-        console.error('Submission error:', error.response?.data || error.message)
-        let errorMessage = error.response?.data?.message || 'Failed to add property.'
+        console.error('Submission error:', error.response?.data || error.message);
+        let errorMessage = error.response?.data?.message || 'Failed to add property.';
         if (error.response?.status === 422 && error.response?.data?.errors) {
           Object.assign(
             this.errors,
@@ -345,8 +349,8 @@ export default defineComponent({
                 Array.isArray(value) ? value[0] : value,
               ]),
             ),
-          )
-          errorMessage = Object.values(this.errors).filter(Boolean).join('; ')
+          );
+          errorMessage = Object.values(this.errors).filter(Boolean).join('; ');
         }
         Swal.fire({
           title: 'Error!',
@@ -356,14 +360,14 @@ export default defineComponent({
           toast: true,
           showConfirmButton: false,
           timer: 3000,
-        })
+        });
       } finally {
-        this.isSubmitting = false
+        this.isSubmitting = false;
       }
     },
     isValidDate(dateString: string): boolean {
-      const date = new Date(dateString)
-      return date instanceof Date && !isNaN(date.getTime())
+      const date = new Date(dateString);
+      return date instanceof Date && !isNaN(date.getTime());
     },
     resetForm() {
       this.form = {
@@ -379,8 +383,9 @@ export default defineComponent({
         status: '',
         list_date: '',
         branch_id: null,
+        team_id: null, // Included team_id
         is_featured: false,
-      }
+      };
       this.errors = {
         title: '',
         description: '',
@@ -394,12 +399,13 @@ export default defineComponent({
         status: '',
         list_date: '',
         branch_id: '',
+        team_id: '', // Included team_id
         is_featured: '',
-      }
-      this.$emit('close')
+      };
+      this.$emit('close');
     },
   },
-})
+});
 </script>
 
 <style scoped>

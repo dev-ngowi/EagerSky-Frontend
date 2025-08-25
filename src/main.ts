@@ -1,40 +1,65 @@
-import { createApp } from 'vue'
-import App from './App.vue'
-import i18n from './i18n'
-import { createVuestic } from 'vuestic-ui'
-import { createGtm } from '@gtm-support/vue-gtm'
-import stores from './stores'
-import router from './router'
-import vuesticGlobalConfig from './services/vuestic-ui/global-config'
-import './services/interceptors/interceptors'
-import './scss/main.scss'
-import 'md-editor-v3/lib/style.css'
+import { createApp } from 'vue';
+import App from './App.vue';
+import { createI18n } from 'vue-i18n';
+import { createVuestic } from 'vuestic-ui';
+import { createPinia } from 'pinia';
+import router from './router';
+import Swal from 'sweetalert2';
+import './scss/main.scss';
+import './services/interceptors/interceptors';
+import AOS from 'aos';
+import 'aos/dist/aos.css';
+import 'bootstrap/dist/js/bootstrap.bundle';
+import 'swiper/swiper-bundle.css';
 
-const app = createApp(App)
+const messages = {
+  en: {
+    AppName: 'EagerSky',
+    Home: 'Home',
+    Properties: 'Properties',
+    Services: 'Services',
+    About: 'About',
+    Contact: 'Contact',
+    'My Account': 'My Account',
+    Login: 'Login',
+  },
+};
 
-// Register Pinia stores
-app.use(stores)
+const i18n = createI18n({
+  legacy: false,
+  locale: 'en',
+  messages,
+});
 
-// Register Vue Router
-app.use(router)
+const stores = createPinia();
 
-// Register i18n for internationalization
-app.use(i18n)
+const vuesticGlobalConfig = {};
 
-// Register Vuestic UI with global configuration
-// This includes VaToast for notifications
-app.use(createVuestic({ config: vuesticGlobalConfig }))
+const app = createApp(App);
 
-// Conditionally register Google Tag Manager if enabled
-if (import.meta.env.VITE_APP_GTM_ENABLED) {
-  app.use(
-    createGtm({
-      id: import.meta.env.VITE_APP_GTM_KEY,
-      debug: false,
-      vueRouter: router,
-    }),
-  )
-}
+// Register SweetAlert2 globally
+app.config.globalProperties.$swal = Swal;
 
-// Mount the app
-app.mount('#app')
+// Global error handler
+app.config.errorHandler = (err, instance, info) => {
+  console.error('Global error:', err, info);
+  app.config.globalProperties.$toast?.init({
+    message: 'An unexpected error occurred. Please try again.',
+    color: 'danger',
+  });
+};
+
+app.use(stores);
+app.use(router);
+app.use(i18n);
+app.use(createVuestic({ config: vuesticGlobalConfig }));
+
+// Initialize AOS after mounting
+app.mount('#app');
+
+setTimeout(() => {
+  AOS.init({
+    duration: 1000,
+    once: true,
+  });
+}, 0);

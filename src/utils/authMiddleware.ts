@@ -26,8 +26,10 @@ export class AuthMiddleware {
   private static readonly TOKEN_KEY = 'authToken';
 
   static getTokenExpiration(): number {
-    return new Date().getTime() + this.TOKEN_EXPIRY_HOURS * 60 * 60 * 1000;
-  }
+  const now = new Date();
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  return endOfDay.getTime();
+}
 
   static isSessionValid(): boolean {
     try {
@@ -252,7 +254,7 @@ export class AuthMiddleware {
       case 'landlord':
         return 'landlord-dashboard';
       case 'tenant':
-        return 'tenant-dashboard';
+        return 'my-account'; // Changed to my-account to prevent tenant-dashboard redirect
       default:
         return 'login';
     }

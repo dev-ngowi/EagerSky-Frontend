@@ -7,16 +7,16 @@
         'w-signup': $route.name === 'signup',
       }"
     >
-      <RouterView />
+      <router-view />
     </main>
   </div>
 </template>
 
 <script lang="ts" setup>
-// No logic needed here
+// No logic needed here - just render the auth pages
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .auth-layout {
   display: flex;
   justify-content: center;
@@ -40,6 +40,7 @@
 .w-login {
   max-width: 480px;
 }
+
 .w-signup {
   max-width: 680px;
 }
@@ -58,11 +59,11 @@
     border-radius: 0.4rem;
     max-width: 90vw;
   }
-
+  
   .w-login {
     max-width: 90vw;
   }
-
+  
   .w-signup {
     max-width: 95vw;
   }

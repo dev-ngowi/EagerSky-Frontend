@@ -5,7 +5,7 @@
       <h3 class="text-base sm:text-lg font-semibold text-gray-700">Upload Requirements</h3>
       <ul class="list-disc pl-5 text-sm sm:text-base text-gray-600">
         <li>Allowed formats: {{ requirements.allowed_formats.join(', ') }}</li>
-        <li>Maximum size: {{ requirements.max_size }}</li>
+        <li>Maximum size per image: {{ requirements.max_size }}</li>
         <li>Minimum images per room: {{ requirements.min_images_per_room }}</li>
         <li>Maximum images per room: {{ requirements.max_images_per_room }}</li>
         <li>Maximum caption length: {{ requirements.caption_max_length }} characters</li>
@@ -29,7 +29,7 @@
             @update:modelValue="fetchRooms"
           />
           <p v-if="!properties.length && !loadingProperties" class="text-red-500 text-sm mt-1">
-            No properties available.
+            No properties available (all have maximum images).
           </p>
         </div>
         <div class="mb-4 sm:mb-6">
@@ -46,7 +46,7 @@
             required
           />
           <p v-if="!rooms.length && !loadingRooms && form.property_id" class="text-red-500 text-sm mt-1">
-            No rooms available for this property.
+            No rooms available for this property (all have maximum images).
           </p>
         </div>
         <div class="mb-4 sm:mb-6">
@@ -69,7 +69,7 @@
             class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             @change="handleMultipleFileChange"
           />
-          <p v-if="errors.image" class="text-red-500 text-sm mt-1">{{ errors.image }}</p>
+          <p v-for="error in errors.image" :key="error" class="text-red-500 text-sm mt-1">{{ error }}</p>
           <div v-if="imagePreviews.length" class="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
             <div v-for="(preview, index) in imagePreviews" :key="index" class="relative p-2 bg-gray-50 rounded-lg border min-w-0">
               <img
@@ -87,6 +87,12 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
+            </div>
+          </div>
+          <div v-if="uploadProgress > 0" class="mt-2">
+            <p class="text-sm text-gray-600">Upload Progress: {{ uploadProgress }}%</p>
+            <div class="w-full bg-gray-200 rounded h-2">
+              <div class="bg-blue-600 h-2 rounded" :style="{ width: `${uploadProgress}%` }"></div>
             </div>
           </div>
         </div>
@@ -109,13 +115,16 @@
 <script lang="ts">
 import { defineComponent } from 'vue';
 import Swal from 'sweetalert2';
-import makeRequest from '../../../../services/makeRequest';
+import Compressor from 'compressorjs';
 import { format } from 'date-fns';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../../../../stores/auth-store';
 import { AuthMiddleware } from '../../../../utils/authMiddleware';
+import makeRequest from '../../../../services/makeRequest';
+import { v4 as uuidv4 } from 'uuid';
+import { AxiosProgressEvent } from 'axios';
 
-// Define interfaces explicitly
+// Interfaces for type safety
 interface Image {
   id: number;
   property_id: number;
@@ -125,7 +134,7 @@ interface Image {
   uploader?: string;
   created_at?: string;
   updated_at?: string;
-  user_id?: number;
+  user_id?: string;
 }
 
 interface FormData {
@@ -139,12 +148,13 @@ interface Errors {
   property_id: string;
   room_id: string;
   caption: string;
-  image: string;
+  image: string[];
 }
 
 interface Requirements {
   allowed_formats: string[];
   max_size: string;
+  max_size_bytes: number;
   min_images_per_room: number;
   max_images_per_room: number;
   caption_max_length: number;
@@ -159,6 +169,11 @@ interface Property {
 interface Room {
   value: number;
   text: string;
+}
+
+interface ImagePreview {
+  url: string;
+  file: File;
 }
 
 export default defineComponent({
@@ -180,8 +195,9 @@ export default defineComponent({
     loadingProperties: boolean;
     loadingRooms: boolean;
     isSubmitting: boolean;
-    imagePreviews: { url: string; file: File }[];
+    imagePreviews: ImagePreview[];
     requirements: Requirements;
+    uploadProgress: number;
   } {
     return {
       form: {
@@ -194,7 +210,7 @@ export default defineComponent({
         property_id: '',
         room_id: '',
         caption: '',
-        image: '',
+        image: [],
       },
       properties: [],
       rooms: [],
@@ -205,15 +221,17 @@ export default defineComponent({
       requirements: {
         allowed_formats: ['jpeg', 'jpg', 'png', 'gif'],
         max_size: '10MB (10240KB)',
+        max_size_bytes: 10 * 1024 * 1024,
         min_images_per_room: 3,
         max_images_per_room: 8,
         caption_max_length: 255,
         notes: [
           'Images must be unique by filename.',
-          'Images will be watermarked with the uploader’s name.',
+          'Images will be watermarked with the uploader\'s name.',
           'Only users with admin or agent roles can upload images.',
         ],
       },
+      uploadProgress: 0,
     };
   },
   mounted() {
@@ -222,10 +240,8 @@ export default defineComponent({
       return;
     }
     this.fetchProperties();
-    this.fetchRequirements();
   },
   methods: {
-    // Centralized error handling
     handleError(message: string, redirectToLogin = false) {
       console.error('Error:', message);
       Swal.fire({
@@ -244,24 +260,11 @@ export default defineComponent({
           this.router.push({ name: 'login' });
         }
       });
+      this.isSubmitting = false;
+      this.uploadProgress = 0;
     },
-
-    async fetchRequirements() {
-      try {
-        const response = await makeRequest({
-          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/room-images/requirements`,
-          method: 'get',
-          requiresAuth: true,
-        });
-        if (response.status === 200) {
-          this.requirements = response.data.requirements;
-        }
-      } catch (error: any) {
-        this.handleError(error.response?.data?.message || 'Failed to fetch upload requirements.');
-      }
-    },
-
     async fetchProperties() {
+      console.log('Fetching properties...');
       this.loadingProperties = true;
       try {
         const response = await makeRequest({
@@ -269,25 +272,48 @@ export default defineComponent({
           method: 'get',
           requiresAuth: true,
         });
-        if (response.status === 200) {
-          this.properties = response.data.data.map((property: any) => ({
-            value: property.id,
-            text: property.title || `Property ${property.id}`,
-          }));
-          if (!this.properties.length) {
-            this.errors.property_id = 'No properties available.';
-            Swal.fire({
-              title: 'Info',
-              text: 'No properties available for image upload.',
-              icon: 'info',
-              position: 'top-end',
-              toast: true,
-              showConfirmButton: false,
-              timer: 3000,
-            });
+        console.log('Properties response:', response);
+        if (response.status !== 200) {
+          throw new Error(response.data?.message || 'Failed to fetch properties.');
+        }
+        this.properties = [];
+        for (const property of response.data.data) {
+          const roomResponse = await makeRequest({
+            url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/rooms`,
+            method: 'get',
+            requiresAuth: true,
+            params: { property_id: property.id },
+          });
+          if (roomResponse.status === 200 && roomResponse.data.data.length) {
+            const hasAvailableRoom = await Promise.all(
+              roomResponse.data.data.map(async (room: any) => {
+                const imageCount = await this.currentImageCount(room.id);
+                return imageCount < this.requirements.max_images_per_room;
+              })
+            );
+            if (hasAvailableRoom.some(Boolean)) {
+              this.properties.push({
+                value: property.id,
+                text: property.title || `Property ${property.id}`,
+              });
+            }
           }
         }
+        console.log('Available properties:', this.properties);
+        if (!this.properties.length) {
+          this.errors.property_id = 'No properties with available rooms for image upload.';
+          Swal.fire({
+            title: 'Info',
+            text: 'No properties available. All rooms have reached the maximum image limit.',
+            icon: 'info',
+            position: 'top-end',
+            toast: true,
+            showConfirmButton: false,
+            timer: 3000,
+          });
+        }
       } catch (error: any) {
+        console.error('Error fetching properties:', error);
         const errorMessage = error.response?.status === 401
           ? 'Your session has expired or the token is invalid. Please log in again.'
           : error.message.includes('Network Error')
@@ -299,8 +325,8 @@ export default defineComponent({
         this.loadingProperties = false;
       }
     },
-
     async fetchRooms() {
+      console.log('Fetching rooms for property:', this.form.property_id);
       this.form.room_id = null;
       this.rooms = [];
       if (!this.form.property_id) {
@@ -315,29 +341,35 @@ export default defineComponent({
           requiresAuth: true,
           params: { property_id: this.form.property_id },
         });
-        if (response.status === 200) {
-          this.rooms = (await Promise.all(
-            response.data.data.map(async (room: any) => {
-              const imageCount = await this.currentImageCount(room.id);
-              return imageCount < this.requirements.max_images_per_room
-                ? { value: room.id, text: room.room_number || `Room ${room.id}` }
-                : null;
-            })
-          )).filter((room): room is Room => room !== null);
-          if (!this.rooms.length) {
-            this.errors.room_id = 'No rooms available for this property.';
-            Swal.fire({
-              title: 'Info',
-              text: 'No rooms available for image upload.',
-              icon: 'info',
-              position: 'top-end',
-              toast: true,
-              showConfirmButton: false,
-              timer: 3000,
+        console.log('Rooms response:', response);
+        if (response.status !== 200) {
+          throw new Error(response.data?.message || 'Failed to fetch rooms.');
+        }
+        this.rooms = [];
+        for (const room of response.data.data) {
+          const imageCount = await this.currentImageCount(room.id);
+          if (imageCount < this.requirements.max_images_per_room) {
+            this.rooms.push({
+              value: room.id,
+              text: room.room_number || `Room ${room.id}`,
             });
           }
         }
+        console.log('Available rooms:', this.rooms);
+        if (!this.rooms.length) {
+          this.errors.room_id = 'No rooms available for this property.';
+          Swal.fire({
+            title: 'Info',
+            text: 'No rooms available. All rooms have reached the maximum image limit.',
+            icon: 'info',
+            position: 'top-end',
+            toast: true,
+            showConfirmButton: false,
+            timer: 3000,
+          });
+        }
       } catch (error: any) {
+        console.error('Error fetching rooms:', error);
         const errorMessage = error.response?.status === 401
           ? 'Your session has expired or the token is invalid. Please log in again.'
           : error.message.includes('Network Error')
@@ -349,58 +381,103 @@ export default defineComponent({
         this.loadingRooms = false;
       }
     },
-
+    async compressImage(file: File): Promise<File> {
+      console.log(`Compressing image: ${file.name}, size: ${file.size} bytes`);
+      return new Promise((resolve, reject) => {
+        new Compressor(file, {
+          quality: 0.6,
+          maxWidth: 1920,
+          maxHeight: 1080,
+          mimeType: file.type,
+          success(compressedFile) {
+            console.log(`Image compressed: ${file.name}, new size: ${compressedFile.size} bytes`);
+            resolve(compressedFile as File);
+          },
+          error(err) {
+            console.error('Compression error:', err);
+            reject(new Error(`Failed to compress image: ${file.name}`));
+          },
+        });
+      });
+    },
     async handleMultipleFileChange(event: Event) {
-      this.errors.image = '';
+      console.log('File input changed');
+      this.errors.image = [];
       const input = event.target as HTMLInputElement;
       if (!input.files || !input.files.length) {
-        this.errors.image = 'Please select at least one image.';
+        this.errors.image.push('Please select at least one image.');
         this.form.images = [];
+        this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
         this.imagePreviews = [];
         return;
       }
-
       const files = Array.from(input.files);
-      const allowedTypes = this.requirements.allowed_formats.map((fmt: string) => `image/${fmt}`);
-      const maxSize = 10 * 1024 * 1024; // 10MB
+      console.log(`Selected ${files.length} files`);
+      const allowedTypes = this.requirements.allowed_formats.map((fmt) => `image/${fmt}`);
+      const maxSize = this.requirements.max_size_bytes;
       const existingImages = this.form.room_id ? await this.currentImageCount(this.form.room_id) : 0;
       const totalImages = existingImages + files.length;
-
+      console.log(`Existing images: ${existingImages}, new images: ${files.length}, total: ${totalImages}`);
+      
       if (totalImages > this.requirements.max_images_per_room) {
-        this.errors.image = `Cannot add ${files.length} image(s). Maximum of ${this.requirements.max_images_per_room} images per room.`;
+        this.errors.image.push(`Cannot add ${files.length} image(s). Maximum of ${this.requirements.max_images_per_room} images per room.`);
         this.form.images = [];
+        this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
         this.imagePreviews = [];
         return;
       }
-
       if (files.length < this.requirements.min_images_per_room && existingImages === 0) {
-        this.errors.image = `Please upload at least ${this.requirements.min_images_per_room} images for new rooms.`;
+        this.errors.image.push(`Please upload at least ${this.requirements.min_images_per_room} images for new rooms.`);
         this.form.images = [];
+        this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
         this.imagePreviews = [];
         return;
       }
-
+      const compressedFiles: File[] = [];
       for (const file of files) {
+        console.log(`Processing file: ${file.name}, size: ${file.size}, type: ${file.type}`);
         const extension = file.name.split('.').pop()?.toLowerCase() || '';
         if (!allowedTypes.includes(file.type) || !this.requirements.allowed_formats.includes(extension)) {
-          this.errors.image = `Only ${this.requirements.allowed_formats.join(', ')} files are allowed.`;
+          this.errors.image.push(`Only ${this.requirements.allowed_formats.join(', ')} files are allowed.`);
           this.form.images = [];
+          this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
           this.imagePreviews = [];
           return;
         }
         if (file.size > maxSize) {
-          this.errors.image = 'Each image must not exceed 10MB.';
+          this.errors.image.push('Each image must not exceed 10MB before compression. Try compressing or using a smaller file.');
           this.form.images = [];
+          this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
+          this.imagePreviews = [];
+          return;
+        }
+        if (file.size > maxSize / 2) {
+          Swal.fire({
+            title: 'Large File Detected',
+            text: 'Your image will be compressed to reduce size, which may affect quality.',
+            icon: 'info',
+            position: 'top-end',
+            toast: true,
+            showConfirmButton: false,
+            timer: 3000,
+          });
+        }
+        try {
+          const compressedFile = await this.compressImage(file);
+          compressedFiles.push(compressedFile);
+        } catch (error: any) {
+          this.errors.image.push(error.message);
+          this.form.images = [];
+          this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
           this.imagePreviews = [];
           return;
         }
       }
-
-      this.form.images = files;
-      this.imagePreviews = files.map(file => ({ url: URL.createObjectURL(file), file }));
-      this.errors.image = '';
+      this.form.images = compressedFiles;
+      this.imagePreviews = compressedFiles.map(file => ({ url: URL.createObjectURL(file), file }));
+      this.errors.image = [];
+      console.log(`Successfully processed ${compressedFiles.length} images`);
     },
-
     async currentImageCount(roomId: number): Promise<number> {
       try {
         const response = await makeRequest({
@@ -415,113 +492,222 @@ export default defineComponent({
         return 0;
       }
     },
-
     removePreview(index: number) {
+      console.log(`Removing preview at index ${index}`);
+      URL.revokeObjectURL(this.imagePreviews[index].url);
       this.form.images.splice(index, 1);
       this.imagePreviews.splice(index, 1);
-      if (!this.form.images.length) {
-        this.errors.image = 'Please select at least one image.';
-      } else {
-        this.errors.image = '';
-      }
+      this.errors.image = this.form.images.length ? [] : ['Please select at least one image.'];
     },
-
-    async submitForm() {
-      if (this.isSubmitting) return;
-      this.errors = { property_id: '', room_id: '', caption: '', image: '' };
+    async uploadChunk(file: File, chunk: Blob, chunkIndex: number, totalChunks: number, filename: string, propertyId: number, roomId: number, userId: string, caption: string, retryCount = 0): Promise<void> {
+      console.log(`Uploading chunk ${chunkIndex + 1}/${totalChunks} for ${filename} (attempt ${retryCount + 1})`);
+      const formData = new FormData();
+      formData.append('chunk', chunk);
+      formData.append('chunk_index', String(chunkIndex));
+      formData.append('total_chunks', String(totalChunks));
+      formData.append('filename', filename);
+      formData.append('property_id', String(propertyId));
+      formData.append('room_id', String(roomId));
+      formData.append('user_id', userId);
+      formData.append('caption', caption);
+      formData.append('session_id', uuidv4());
       
-      if (!this.form.property_id) {
-        this.errors.property_id = 'Property is required';
-      }
-      if (!this.form.room_id) {
-        this.errors.room_id = 'Room is required';
-      }
-      if (!this.form.images.length) {
-        this.errors.image = 'Please select at least one image.';
-      }
-      if (this.form.caption && this.form.caption.length > this.requirements.caption_max_length) {
-        this.errors.caption = `Caption must not exceed ${this.requirements.caption_max_length} characters`;
-      }
-
-      if (Object.values(this.errors).some(error => error)) {
-        return;
-      }
-
-      if (!this.authStore.isAuthenticated || !AuthMiddleware.isSessionValid()) {
-        this.handleError('You are not logged in. Please log in and try again.', true);
-        return;
-      }
-
-      this.isSubmitting = true;
       try {
-        const userProfile = this.authStore.userProfile;
-        if (!userProfile?.id) {
-          throw new Error('User profile not found. Please log in again.');
-        }
-
-        console.log('Submitting form with user_id:', userProfile.id);
-
-        const formData = new FormData();
-        formData.append('property_id', String(this.form.property_id));
-        formData.append('room_id', String(this.form.room_id));
-        formData.append('user_id', String(userProfile.id));
-        this.form.images.forEach((image, index) => {
-          formData.append(`images[]`, image);
-          formData.append(`captions[]`, this.form.caption || '');
-        });
-
         const response = await makeRequest({
-          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/room-images`,
+          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/room-images/chunk`,
           method: 'post',
           data: formData,
           requiresAuth: true,
+          onUploadProgress: (progressEvent: AxiosProgressEvent) => {
+            if (progressEvent.total) {
+              const progress = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+              this.uploadProgress = Math.min(100, (chunkIndex / totalChunks) * 100 + (progress / totalChunks));
+            }
+          },
         });
-
-        if (response.status === 201) {
-          const newImages = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
-          const formattedImages = newImages.map((image: any) => ({
-            id: image.id,
-            property_id: image.property_id,
-            room_id: image.room_id,
-            file_path: image.file_path,
-            caption: image.caption || null,
-            uploader: image.uploader || 'EagerSky',
-            created_at: image.created_at ? format(new Date(image.created_at), 'd MMMM yyyy') : 'None',
-            updated_at: image.updated_at ? format(new Date(image.updated_at), 'd MMMM yyyy') : 'None',
-            user_id: image.user_id ? Number(image.user_id) : undefined,
-          })) as Image[];
-
-          Swal.fire({
-            title: 'Success!',
-            text: `${this.form.images.length} room image(s) uploaded successfully.`,
-            icon: 'success',
-            position: 'top-end',
-            toast: true,
-            showConfirmButton: false,
-            timer: 3000,
-          });
-          this.resetForm();
-          this.$emit('close', formattedImages);
+        
+        console.log(`Chunk ${chunkIndex + 1} response:`, response);
+        
+        if (response.status !== 200 && response.status !== 201) {
+          console.error(`Chunk upload failed with status ${response.status}:`, response.data);
+          throw new Error(response.data?.message || `Chunk upload failed with status ${response.status}.`);
         }
       } catch (error: any) {
-        const errorMessage = error.response?.status === 401
-          ? 'Your session has expired or the token is invalid. Please log in again.'
-          : error.response?.status === 422 && error.response?.data?.errors
-            ? Object.entries(error.response.data.errors)
-                .map(([key, value]) => [key === 'images.0' ? 'image' : key, Array.isArray(value) ? value[0] : value])
-                .filter(Boolean)
-                .join('; ')
-            : error.message || 'Failed to upload room images.';
-        this.handleError(errorMessage, error.response?.status === 401 || error.message.includes('User profile not found'));
-      } finally {
-        this.isSubmitting = false;
+        console.error('Chunk upload error:', {
+          filename,
+          chunkIndex,
+          totalChunks,
+          retryCount,
+          error: error.message,
+          response: error.response?.data,
+        });
+        
+        if (retryCount < 3) {
+          console.log(`Retrying chunk upload in ${1000 * (retryCount + 1)}ms`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.uploadChunk(file, chunk, chunkIndex, totalChunks, filename, propertyId, roomId, userId, caption, retryCount + 1);
+        }
+        
+        throw new Error(`Failed to upload chunk for ${filename} after 3 retries: ${error.message}`);
       }
     },
-
+    async submitForm() {
+      console.log('=== SUBMIT FORM START ===');
+      console.log('Form data:', this.form);
+      console.log('Image count:', this.form.images.length);
+      console.log('Button disabled conditions:', {
+        isSubmitting: this.isSubmitting,
+        hasRoomId: !!this.form.room_id,
+        hasImages: !!this.form.images.length
+      });
+      
+      // Reset errors and validate
+      this.errors = { property_id: '', room_id: '', caption: '', image: [] };
+      
+      if (!this.authStore.isAuthenticated || !AuthMiddleware.isSessionValid()) {
+        console.error('Authentication error');
+        this.handleError('You are not logged in. Please log in and try again.', true);
+        return;
+      }
+      
+      // Form validation
+      if (!this.form.property_id) {
+        console.error('Property ID missing');
+        this.errors.property_id = 'Property is required';
+      }
+      if (!this.form.room_id) {
+        console.error('Room ID missing');
+        this.errors.room_id = 'Room is required';
+      }
+      if (!this.form.images.length) {
+        console.error('No images selected');
+        this.errors.image.push('Please select at least one image.');
+      }
+      if (this.form.caption && this.form.caption.length > this.requirements.caption_max_length) {
+        console.error('Caption too long');
+        this.errors.caption = `Caption must not exceed ${this.requirements.caption_max_length} characters`;
+      }
+      
+      // If validation errors exist, stop submission
+      const hasErrors = this.errors.property_id !== '' || 
+                       this.errors.room_id !== '' || 
+                       this.errors.caption !== '' || 
+                       this.errors.image.length > 0;
+                       
+      console.log('Validation errors:', JSON.parse(JSON.stringify(this.errors)));
+      console.log('Has errors:', hasErrors);
+      
+      if (hasErrors) {
+        console.error('Form validation failed');
+        return;
+      }
+      
+      this.isSubmitting = true;
+      this.uploadProgress = 0;
+      
+      try {
+        const userProfile = this.authStore.userProfile;
+        console.log('User profile:', userProfile);
+        
+        if (!userProfile?.id) {
+          console.error('User profile not found');
+          throw new Error('User profile not found. Please log in again.');
+        }
+        
+        const chunkSize = 2 * 1024 * 1024; // 2MB chunks
+        const uploadedImages: Image[] = [];
+        
+        console.log(`Processing ${this.form.images.length} images`);
+        
+        for (const [index, image] of this.form.images.entries()) {
+          console.log(`Processing image ${index + 1}/${this.form.images.length}: ${image.name}`);
+          
+          const extension = image.name.split('.').pop()?.toLowerCase() || '';
+          const filename = `${uuidv4()}_room-testimonials-${index + 1}.${extension}`;
+          const totalChunks = Math.ceil(image.size / chunkSize);
+          
+          console.log(`Image ${image.name} will be uploaded in ${totalChunks} chunks`);
+          
+          for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, image.size);
+            const chunk = image.slice(start, end);
+            
+            console.log(`Uploading chunk ${i + 1}/${totalChunks} for ${image.name}`);
+            
+            try {
+              await this.uploadChunk(image, chunk, i, totalChunks, filename, this.form.property_id!, this.form.room_id!, userProfile.id, this.form.caption);
+              console.log(`Chunk ${i + 1}/${totalChunks} uploaded successfully`);
+            } catch (chunkError) {
+              console.error(`Error uploading chunk ${i + 1}/${totalChunks}:`, chunkError);
+              throw chunkError;
+            }
+          }
+          
+          uploadedImages.push({
+            id: index + 1, // Temporary ID
+            property_id: this.form.property_id!,
+            room_id: this.form.room_id!,
+            file_path: `/room_images/${filename}`,
+            caption: this.form.caption || null,
+            uploader: userProfile.username || 'EagerSky',
+            created_at: format(new Date(), 'd MMMM yyyy'),
+            updated_at: format(new Date(), 'd MMMM yyyy'),
+            user_id: userProfile.id,
+          });
+          
+          console.log(`Image ${index + 1} processed successfully`);
+        }
+        
+        console.log('All images uploaded successfully');
+        
+        Swal.fire({
+          title: 'Success!',
+          text: `${this.form.images.length} room image(s) uploaded successfully.`,
+          icon: 'success',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+        
+        this.resetForm();
+        this.$emit('close', uploadedImages);
+      } catch (error: any) {
+        console.error('=== SUBMIT FORM ERROR ===');
+        console.error('Error message:', error.message);
+        console.error('Error response:', error.response?.data);
+        console.error('Error status:', error.response?.status);
+        console.error('Full error:', error);
+        
+        const errorMessage = error.response?.status === 413
+          ? 'The uploaded data is too large. Please try uploading smaller images or contact support.'
+          : error.response?.status === 401
+            ? 'Your session has expired or the token is invalid. Please log in again.'
+            : error.response?.data?.errors
+              ? Object.entries(error.response.data.errors)
+                  .map(([key, value]) => [key === 'chunk' ? 'image' : key, Array.isArray(value) ? value[0] : value] as [string, string])
+                  .map(([key, value]) => `${key}: ${value}`)
+                  .join('; ')
+              : error.message || 'Failed to upload room images. Please try again or contact support.';
+              
+        this.handleError(errorMessage, error.response?.status === 401 || error.message.includes('User profile not found'));
+        this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
+        this.imagePreviews = [];
+        this.form.images = [];
+      } finally {
+        console.log('=== SUBMIT FORM END ===');
+        this.isSubmitting = false;
+        this.uploadProgress = 0;
+      }
+    },
     resetForm() {
+      console.log('Resetting form');
       this.form = { property_id: null, room_id: null, caption: '', images: [] };
+      this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
       this.imagePreviews = [];
-      this.errors = { property_id: '', room_id: '', caption: '', image: '' };
+      this.errors = { property_id: '', room_id: '', caption: '', image: [] };
+      this.uploadProgress = 0;
       this.$emit('close');
     },
   },
@@ -529,6 +715,16 @@ export default defineComponent({
 </script>
 
 <style scoped>
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #fff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 0.5rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 /* Container */
 .bg-white { background-color: #ffffff; }
 .shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
@@ -537,7 +733,6 @@ export default defineComponent({
 .sm\:p-6 { @media (min-width: 640px) { padding: 1.5rem; } }
 .max-w-full { max-width: 100%; }
 .overflow-x-auto { overflow-x: auto; }
-
 /* Typography */
 .text-xl { font-size: 1.25rem; }
 .sm\:text-2xl { @media (min-width: 640px) { font-size: 1.5rem; } }
@@ -552,7 +747,6 @@ export default defineComponent({
 .text-gray-700 { color: #374151; }
 .text-gray-600 { color: #4b5563; }
 .text-red-500 { color: #ef4444; }
-
 /* Grid */
 .grid { display: grid; }
 .grid-cols-1 { grid-template-columns: repeat(1, 1fr); }
@@ -561,7 +755,6 @@ export default defineComponent({
 .md\:grid-cols-3 { @media (min-width: 768px) { grid-template-columns: repeat(3, 1fr); } }
 .gap-3 { gap: 0.75rem; }
 .sm\:gap-4 { @media (min-width: 640px) { gap: 1rem; } }
-
 /* Image Preview Container */
 .relative { position: relative; }
 .p-2 { padding: 0.5rem; }
@@ -569,13 +762,11 @@ export default defineComponent({
 .rounded { border-radius: 0.25rem; }
 .border { border-width: 1px; border-color: #e5e7eb; }
 .min-w-0 { min-width: 0; }
-
 /* Images */
 .max-h-32 { max-height: 8rem; }
 .w-full { width: 100%; }
 .object-cover { object-fit: cover; }
 .aspect-square { aspect-ratio: 1 / 1; }
-
 /* Delete Button */
 .absolute { position: absolute; }
 .top-1 { top: 0.25rem; }
@@ -585,7 +776,6 @@ export default defineComponent({
 .hover\:text-red-700:hover { color: #b91c1c; }
 .h-5 { height: 1.25rem; }
 .w-5 { width: 1.25rem; }
-
 /* Spacing */
 .mb-4 { margin-bottom: 1rem; }
 .sm\:mb-6 { @media (min-width: 640px) { margin-bottom: 1.5rem; } }
@@ -593,19 +783,6 @@ export default defineComponent({
 .mt-4 { margin-top: 1rem; }
 .space-x-3 > :not(:last-child) { margin-right: 0.75rem; }
 .pl-5 { padding-left: 1.25rem; }
-
 /* List */
 .list-disc { list-style-type: disc; }
-
-/* Spinner */
-.spinner {
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid #fff;
-  border-top: 2px solid transparent;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 0.5rem;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
 </style>

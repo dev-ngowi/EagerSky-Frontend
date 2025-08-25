@@ -1,0 +1,12 @@
+.hero {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+  .carousel-item {
+    height: 100vh;
+    img {
+      object-fit: cover;
+      height: 100%;
+    }
+  }
+}

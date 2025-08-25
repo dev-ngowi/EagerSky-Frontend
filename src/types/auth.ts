@@ -47,30 +47,41 @@ export interface ResendOtpPayload {
 export interface ErrorResponseData {
   message: string;
   errors?: Record<string, string[]>;
+  data?: { id?: string; user_id?: string };
+  requires_2fa?: boolean; // Added for 2FA check
+  email?: string; // Added for email in 403 response
+  user_id?: string; // Added for user_id in 403 response
 }
 
 // User data returned from API
 export interface UserData {
   id: string;
-  first_name: string;
-  last_name: string;
-  username: string;
-  email: string;
-  phone: string;
-  role_id: number;
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+  email?: string;
+  phone?: string;
+  role_id?: number;
   role: string;
-  branch: string | null;
-  client_type: string | null;
-  nida_number: string | null;
-  student_registration_number: string | null;
-  permissions: string[];
-  token?: string;
-  profile_picture?: string;
-  pin?: string; // A
+  branch?: string | null;
+  client_type?: string | null;
+  nida_number?: string | null;
+  student_registration_number?: string | null;
+  permissions?: string[];
+  token?: string | null;
+  profile_picture?: string | null | undefined;
+  pin?: string | null | undefined;
+  requires_2fa?: boolean;
 }
 
 // API response type for success and error cases
-export type ApiResponse<T> = AxiosResponse<
-  | { data: T }
-  | ErrorResponseData
->;
+export type ApiResponse<T> = AxiosResponse<{
+  data: T | ErrorResponseData;
+  status: number;
+}> & {
+  redirectTo?: {
+    name?: string;
+    path?: string;
+    query?: { email?: string; user_id?: string }; // Added query for redirectTo
+  };
+};

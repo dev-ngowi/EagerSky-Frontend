@@ -205,7 +205,7 @@ export default defineComponent({
       updatingId: null as number | null,
       searchQuery: '' as string,
       componentKey: 0,
-      statusOptions: ['pending', 'completed', 'failed', 'refunded'],
+      statusOptions: ['pending', 'completed', 'received', 'failed', 'refunded'],
       perPageOptions: [
         { value: 10, text: '10' },
         { value: 15, text: '15' },
@@ -452,26 +452,12 @@ export default defineComponent({
 <style scoped>
 .card {
   background-color: #ffffff;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   border-radius: 0.5rem;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
-  padding-top: 1.5rem;
-  padding-bottom: 1.5rem;
-
-  @media screen and (max-width: 768px) {
-    padding-left: 1rem;
-    padding-right: 1rem;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-  }
-
-  @media screen and (max-width: 480px) {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-  }
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .mb-4 {
@@ -484,6 +470,7 @@ export default defineComponent({
 
 .flex {
   display: flex;
+  flex-wrap: wrap;
 }
 
 .justify-between {
@@ -520,5 +507,114 @@ export default defineComponent({
 
 .bg-gray-50 {
   background-color: #f9fafb;
+}
+
+/* Data Table Specific Styling */
+:deep(.va-data-table) {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+:deep(.va-data-table__table) {
+  min-width: 100%;
+  table-layout: auto;
+}
+
+:deep(.va-data-table__table-th) {
+  white-space: nowrap;
+  font-size: 0.875rem;
+  padding: 0.75rem;
+}
+
+:deep(.va-data-table__table-td) {
+  font-size: 0.875rem;
+  padding: 0.75rem;
+  white-space: nowrap;
+}
+
+/* Modal Styling */
+:deep(.va-modal__inner) {
+  width: 100%;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Media Queries for Responsive Design */
+@media (max-width: 768px) {
+  .card {
+    padding: 1rem;
+  }
+  
+  .w-64 {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .w-32 {
+    width: 100%;
+    max-width: 6rem;
+  }
+  
+  .flex {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .justify-between {
+    justify-content: flex-start;
+  }
+  
+  .space-x-4 > :not(:last-child) {
+    margin-right: 0;
+    margin-bottom: 0.5rem;
+  }
+  
+  .space-x-2 > :not(:last-child) {
+    margin-right: 0;
+    margin-bottom: 0.5rem;
+  }
+  
+  :deep(.va-data-table__table-th),
+  :deep(.va-data-table__table-td) {
+    font-size: 0.8125rem;
+    padding: 0.5rem;
+  }
+  
+  :deep(.va-modal__inner) {
+    max-width: 95vw;
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 0.5rem;
+  }
+  
+  :deep(.va-data-table__table-th),
+  :deep(.va-data-table__table-td) {
+    font-size: 0.75rem;
+    padding: 0.4rem;
+  }
+  
+  :deep(.va-button) {
+    font-size: 0.75rem;
+    padding: 19rem 0.5rem;
+  }
+  
+  :deep(.va-select) {
+    font-size: 0.75rem;
+  }
+  
+  :deep(.va-input) {
+    font-size: 0.75rem;
+  }
+  
+  :deep(.va-modal__inner) {
+    max-width: 98vw;
+    padding: 0.5rem;
+  }
 }
 </style>

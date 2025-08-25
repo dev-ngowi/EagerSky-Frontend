@@ -9,6 +9,15 @@
           @input="debouncedSearch"
         />
       </div>
+      <div class="flex items-center space-x-4">
+        <span>Items per page:</span>
+        <VaSelect
+          v-model="pagination.per_page"
+          :options="perPageOptions"
+          class="w-24"
+          @update:modelValue="handlePerPageChange"
+        />
+      </div>
     </div>
     <VaDataTable
       :key="componentKey"
@@ -27,6 +36,9 @@
         <span class="px-2 py-1 rounded text-sm font-medium bg-yellow-100 text-yellow-800">
           {{ rowData.status }}
         </span>
+      </template>
+      <template #cell(user_name)="{ rowData }">
+        {{ rowData.first_name && rowData.last_name ? `${rowData.first_name} ${rowData.last_name}` : rowData.user_name || 'Unknown User' }}
       </template>
       <template #cell(actions)="{ rowData }">
         <div class="flex space-x-2">
@@ -57,14 +69,14 @@
       <div class="flex space-x-2">
         <VaButton
           size="small"
-          :disabled="pagination.current_page === 1"
+          :disabled="pagination.current_page === 1 || loadingApplications"
           @click="handlePageChange(pagination.current_page - 1)"
         >
           Previous
         </VaButton>
         <VaButton
           size="small"
-          :disabled="pagination.current_page === pagination.last_page"
+          :disabled="pagination.current_page === pagination.last_page || loadingApplications"
           @click="handlePageChange(pagination.current_page + 1)"
         >
           Next
@@ -77,8 +89,9 @@
       <div class="text-lg font-bold mb-4">{{ $t('Pending Rental Application Details') }}</div>
       <div v-if="selectedApplication" class="space-y-2">
         <p><strong>Property:</strong> {{ selectedApplication.property_title || 'None' }}</p>
-        <p><strong>User:</strong> {{ selectedApplication.user_name || 'None' }}</p>
+        <p><strong>User:</strong> {{ selectedApplication.first_name && selectedApplication.last_name ? `${selectedApplication.first_name} ${selectedApplication.last_name}` : selectedApplication.user_name || 'Unknown User' }}</p>
         <p><strong>Branch:</strong> {{ selectedApplication.branch_name || 'None' }}</p>
+        <p><strong>NIDA Number:</strong> {{ selectedApplication.nida_number || 'None' }}</p>
         <p><strong>Employment Status:</strong> {{ selectedApplication.employment_status || 'None' }}</p>
         <p><strong>Annual Income:</strong> {{ selectedApplication.annual_income || 'None' }}</p>
         <p><strong>Background Check Status:</strong> {{ selectedApplication.background_check_status || 'None' }}</p>
@@ -109,7 +122,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue';
+import { defineComponent, ref } from 'vue';
 import Swal from 'sweetalert2';
 import { debounce } from 'lodash';
 import makeRequest from '../../../../services/makeRequest';
@@ -132,38 +145,57 @@ interface GetApplicationsParams {
 
 export default defineComponent({
   name: 'PendingRentalApplicationList',
+  setup() {
+    const applications = ref<RentalApplication[]>([]);
+    const pagination = ref<Pagination>({
+      total: 0,
+      per_page: 10,
+      current_page: 1,
+      last_page: 1,
+    });
+    const loadingApplications = ref<boolean>(false);
+    const showView = ref<boolean>(false);
+    const selectedApplication = ref<RentalApplication | null>(null);
+    const componentKey = ref<number>(0);
+    const searchQuery = ref<string>('');
+    const perPageOptions = ref([
+      { value: 10, text: '10' },
+      { value: 20, text: '20' },
+      { value: 50, text: '50' },
+    ]);
+
+    return {
+      applications,
+      pagination,
+      loadingApplications,
+      showView,
+      selectedApplication,
+      componentKey,
+      searchQuery,
+      perPageOptions,
+    };
+  },
   data() {
     return {
       columns: [
         { key: 'sn', sortable: false, label: 'SN' },
         { key: 'property_title', sortable: true, label: 'Property' },
         { key: 'user_name', sortable: true, label: 'User' },
+        { key: 'nida_number', sortable: true, label: 'NIDA Number' },
         { key: 'employment_status', sortable: true, label: 'Employment Status' },
         { key: 'annual_income', sortable: true, label: 'Annual Income' },
         { key: 'status', sortable: true, label: 'Status' },
         { key: 'created_at', sortable: true, label: 'Created At' },
         { key: 'actions', label: 'Actions', sortable: false },
       ],
-      applications: [] as RentalApplication[],
-      pagination: {
-        total: 0,
-        per_page: 10,
-        current_page: 1,
-        last_page: 1,
-      } as Pagination,
-      loadingApplications: false,
-      showView: false,
-      selectedApplication: null as RentalApplication | null,
-      componentKey: 0,
-      searchQuery: '' as string,
-      debouncedSearch: Function as () => void,
+      debouncedSearch: null as unknown as ((this: any) => void), // Declare debouncedSearch
     };
   },
   created() {
     this.debouncedSearch = debounce(this.handleSearch, 500);
   },
   mounted() {
-    this.getApplications({ page: 1, per_page: 10, status: 'pending' });
+    this.getApplications({ page: 1, per_page: this.pagination.per_page, status: 'pending' });
   },
   methods: {
     async getApplications(params: GetApplicationsParams = {}) {
@@ -177,37 +209,45 @@ export default defineComponent({
             page: params.page || 1,
             per_page: params.per_page || this.pagination.per_page,
             search: params.search || '',
-            status: params.status || 'pending',
+            status: 'pending',
           },
         });
-        console.log('Applications response:', response);
         if (response.status === 200 && 'data' in response.data && 'pagination' in response.data) {
           this.applications = response.data.data
-            .filter((application: any) => application && application.id)
-            .map((application: any) => ({
-              id: application.id,
-              property_id: application.property_id,
-              property_title: application.property_title || 'None',
-              user_id: application.user_id,
-              user_name: application.user_name || 'None',
-              branch_id: application.branch_id,
-              branch_name: application.branch_name || 'None',
-              employment_status: application.employment_status || 'None',
-              annual_income: application.annual_income ?? 'None',
-              background_check_status: application.background_check_status || 'None',
-              credit_report_status: application.credit_report_status || 'None',
-              status: application.status || 'None',
-              created_at: application.created_at ? format(new Date(application.created_at), 'd MMMM yyyy') : 'None',
-              updated_at: application.updated_at ? format(new Date(application.updated_at), 'd MMMM yyyy') : 'None',
-            }));
+            .filter((application: any) => application && application.id && application.status === 'pending')
+            .map((application: any) => {
+              const validStatuses = ['pending', 'approved', 'rejected'] as const;
+              const status: 'pending' | 'approved' | 'rejected' = validStatuses.includes(application.status)
+                ? application.status
+                : 'pending';
+
+              return {
+                id: Number(application.id),
+                property_id: Number(application.property_id),
+                property_title: application.property_title || 'None',
+                user_id: Number(application.user_id),
+                user_name: application.user_name || null,
+                first_name: application.first_name || '',
+                last_name: application.last_name || '',
+                branch_id: application.branch_id ? Number(application.branch_id) : null,
+                branch_name: application.branch_name || 'None',
+                nida_number: application.nida_number || 'None',
+                employment_status: application.employment_status || 'None',
+                annual_income: application.annual_income ? Number(application.annual_income) : 'None',
+                background_check_status: application.background_check_status || 'None',
+                credit_report_status: application.credit_report_status || 'None',
+                status,
+                created_at: application.created_at ? format(new Date(application.created_at), 'd MMMM yyyy') : 'None',
+                updated_at: application.updated_at ? format(new Date(application.updated_at), 'd MMMM yyyy') : 'None',
+              };
+            });
           this.pagination = {
-            total: response.data.pagination?.total || response.data.data.length,
-            per_page: response.data.pagination?.per_page || params.per_page || 10,
-            current_page: response.data.pagination?.current_page || params.page || 1,
-            last_page: response.data.pagination?.last_page || 1,
+            total: response.data.pagination?.total || this.applications.length,
+            per_page: Number(response.data.pagination?.per_page) || params.per_page || 10,
+            current_page: Number(response.data.pagination?.current_page) || params.page || 1,
+            last_page: Number(response.data.pagination?.last_page) || Math.ceil(this.applications.length / this.pagination.per_page),
           };
-          console.log('Applications fetched:', this.applications);
-          if (response.data.data.length === 0) {
+          if (this.applications.length === 0) {
             Swal.fire({
               title: 'Info',
               text: 'No pending rental applications found.',
@@ -240,11 +280,11 @@ export default defineComponent({
     async approveApplication(id: number) {
       try {
         const response = await makeRequest({
-          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/rental-applications/${id}/approve`,
-          method: 'post',
+          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/rental-applications/${id}`,
+          method: 'patch',
           headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`, Accept: 'application/json' },
+          data: { status: 'approved' },
         });
-        console.log('Approve response:', response);
         if (response.status === 200) {
           await this.getApplications({
             page: this.pagination.current_page,
@@ -282,11 +322,11 @@ export default defineComponent({
     async rejectApplication(id: number) {
       try {
         const response = await makeRequest({
-          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/rental-applications/${id}/reject`,
-          method: 'post',
+          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/rental-applications/${id}`,
+          method: 'patch',
           headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`, Accept: 'application/json' },
+          data: { status: 'rejected' },
         });
-        console.log('Reject response:', response);
         if (response.status === 200) {
           await this.getApplications({
             page: this.pagination.current_page,
@@ -323,9 +363,21 @@ export default defineComponent({
     },
     confirmApprove(application: RentalApplication) {
       this.selectedApplication = application;
+      if (application.status !== 'pending') {
+        Swal.fire({
+          title: 'Error!',
+          text: 'Only pending applications can be approved.',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+        return;
+      }
       Swal.fire({
         title: 'Approve Application?',
-        text: `Are you sure you want to approve the application for "${application.property_title}" by ${application.user_name}?`,
+        text: `Are you sure you want to approve the application for "${application.property_title}" by ${application.first_name && application.last_name ? `${application.first_name} ${application.last_name}` : application.user_name || 'Unknown User'}?`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#28a745',
@@ -342,9 +394,21 @@ export default defineComponent({
     },
     confirmReject(application: RentalApplication) {
       this.selectedApplication = application;
+      if (application.status !== 'pending') {
+        Swal.fire({
+          title: 'Error!',
+          text: 'Only pending applications can be rejected.',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+        return;
+      }
       Swal.fire({
         title: 'Reject Application?',
-        text: `Are you sure you want to reject the application for "${application.property_title}" by ${application.user_name}?`,
+        text: `Are you sure you want to reject the application for "${application.property_title}" by ${application.first_name && application.last_name ? `${application.first_name} ${application.last_name}` : application.user_name || 'Unknown User'}?`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
@@ -402,6 +466,8 @@ export default defineComponent({
       this.showView = false;
     },
     async handlePageChange(page: number) {
+      if (page < 1 || page > this.pagination.last_page || this.loadingApplications) return;
+      this.pagination.current_page = page;
       await this.getApplications({
         page,
         per_page: this.pagination.per_page,
@@ -410,7 +476,18 @@ export default defineComponent({
       });
       this.componentKey += 1;
     },
+    async handlePerPageChange() {
+      this.pagination.current_page = 1;
+      await this.getApplications({
+        page: 1,
+        per_page: this.pagination.per_page,
+        search: this.searchQuery,
+        status: 'pending',
+      });
+      this.componentKey += 1;
+    },
     async handleSearch() {
+      this.pagination.current_page = 1;
       await this.getApplications({
         page: 1,
         per_page: this.pagination.per_page,
@@ -461,5 +538,8 @@ export default defineComponent({
 }
 .w-64 {
   width: 16rem;
+}
+.w-24 {
+  width: 6rem;
 }
 </style>

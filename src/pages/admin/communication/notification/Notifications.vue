@@ -162,7 +162,7 @@ interface User {
 export default defineComponent({
   name: 'Notifications',
   setup() {
-    const API_BASE_URL = import.meta.env.VITE_APP_API_BASE_URL || 'https://app.eagersky.co.tz';
+    const API_BASE_URL = import.meta.env.VITE_APP_API_BASE_URL || 'https://e1.japango.co.tz';
 
     // State
     const notifications = ref<Notification[]>([]);

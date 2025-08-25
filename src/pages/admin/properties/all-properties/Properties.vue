@@ -124,26 +124,53 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, computed } from 'vue'
-import { usePropertyStore } from '../../../../stores/propertyStore'
-import { Property, Filters } from '../../../../types/property'
-import PropertyForm from './PropertyForm.vue'
-import PropertyEdit from './PropertyEdit.vue'
-import Swal from 'sweetalert2'
-import { debounce } from 'lodash'
+import { defineComponent, computed, ref } from 'vue';
+import { usePropertyStore } from '../../../../stores/propertyStore';
+import { Property, Filters } from '../../../../types/property';
+import PropertyForm from './PropertyForm.vue';
+import PropertyEdit from './PropertyEdit.vue';
+import Swal from 'sweetalert2';
+import { debounce } from 'lodash';
+import { AxiosResponse } from 'axios';
 
 interface SelectOption {
-  value: number
-  text: string
+  value: number;
+  text: string;
 }
 
 export default defineComponent({
   name: 'PropertyList',
   components: { PropertyForm, PropertyEdit },
   setup() {
-    const propertyStore = usePropertyStore()
-    const isAdminOrAgent = computed(() => true) // Allow all users since authentication is removed
-    return { propertyStore, isAdminOrAgent }
+    const propertyStore = usePropertyStore();
+    const isAdminOrAgent = computed(() => true);
+
+    // Declare reactive refs
+    const componentKey = ref<number>(0);
+    const searchQuery = ref<string>('');
+    const formMode = ref<'add' | 'edit'>('add');
+    const addEditForm = ref<boolean>(false);
+    const showView = ref<boolean>(false);
+    const selectedProperty = ref<Property | null>(null);
+    const filters = ref<Filters>({
+      category_id: null,
+      location_id: null,
+      status: '',
+      min_price: null,
+      max_price: null,
+    });
+
+    return {
+      propertyStore,
+      isAdminOrAgent,
+      componentKey,
+      searchQuery,
+      formMode,
+      addEditForm,
+      showView,
+      selectedProperty,
+      filters,
+    };
   },
   data() {
     return {
@@ -160,48 +187,35 @@ export default defineComponent({
         { key: 'list_date', sortable: true, label: 'List Date' },
         { key: 'actions', label: 'Actions', sortable: false },
       ],
-      addEditForm: false,
-      showView: false,
-      selectedProperty: null as Property | null,
-      formMode: 'add' as 'add' | 'edit',
-      componentKey: 0,
-      searchQuery: '',
-      filters: {
-        category_id: null,
-        location_id: null,
-        status: '',
-        min_price: null,
-        max_price: null,
-      } as Filters,
-    }
+    };
   },
   computed: {
-    properties() {
-      return this.propertyStore.properties as Property[]
+    properties(): Property[] {
+      return this.propertyStore.properties as Property[];
     },
-    loadingProperties() {
-      return this.propertyStore.loadingProperties
+    loadingProperties(): boolean {
+      return this.propertyStore.loadingProperties;
     },
     pagination() {
-      return this.propertyStore.pagination
+      return this.propertyStore.pagination;
     },
-    categories() {
+    categories(): SelectOption[] {
       return this.propertyStore.categories.map((category: any) => ({
         value: category.id,
         text: category.name || `Category ${category.id}`,
-      })) as SelectOption[]
+      }));
     },
-    locations() {
+    locations(): SelectOption[] {
       return this.propertyStore.locations.map((location: any) => ({
         value: location.id,
         text: location.name || `Location ${location.id}`,
-      })) as SelectOption[]
+      }));
     },
-    branches() {
+    branches(): SelectOption[] {
       return this.propertyStore.branches.map((branch: any) => ({
         value: branch.id,
         text: branch.name || `Branch ${branch.id}`,
-      })) as SelectOption[]
+      }));
     },
   },
   async mounted() {
@@ -210,11 +224,11 @@ export default defineComponent({
       this.propertyStore.getLocations(),
       this.propertyStore.getBranches(),
       this.fetchProperties(),
-    ])
-    this.componentKey += 1
+    ]);
+    this.componentKey += 1;
   },
   created() {
-    this.debouncedSearch = debounce(this.fetchProperties, 500)
+    this.debouncedSearch = debounce(this.fetchProperties, 500);
   },
   methods: {
     async fetchProperties() {
@@ -227,38 +241,44 @@ export default defineComponent({
         status: this.filters.status || undefined,
         min_price: this.filters.min_price || undefined,
         max_price: this.filters.max_price || undefined,
-      }
-      await this.propertyStore.getProperties(params)
-      this.componentKey += 1
+      };
+      await this.propertyStore.getProperties(params);
+      this.componentKey += 1;
     },
     openForm(property: Property | null = null, mode: 'add' | 'edit' = 'add') {
       this.selectedProperty = property
-      this.formMode = mode
-      this.addEditForm = true
+        ? { ...property, team_id: property.team_id ?? null }
+        : null;
+      this.formMode = mode;
+      this.addEditForm = true;
     },
     closeForm() {
-      this.selectedProperty = null
-      this.addEditForm = false
-      this.formMode = 'add'
-      this.fetchProperties()
+      this.selectedProperty = null;
+      this.addEditForm = false;
+      this.formMode = 'add';
+      this.fetchProperties();
     },
-    openView(property: Property) {
-      this.propertyStore.getProperty(property.id).then((response: any) => {
+    async openView(property: Property) {
+      try {
+        const response = await this.propertyStore.getProperty(property.id) as AxiosResponse;
         if (response.status === 200 && response.data?.data) {
-          this.selectedProperty = response.data.data as Property
-          this.showView = true
+          this.selectedProperty = {
+            ...response.data.data,
+            team_id: response.data.data.team_id ?? null,
+          } as Property;
+          this.showView = true;
         } else {
           Swal.fire({
             title: 'Error!',
-            text: response.data?.message || 'Failed to fetch property details.',
+            text: (response as any).data?.message || 'Failed to fetch property details.',
             icon: 'error',
             position: 'top-end',
             toast: true,
             showConfirmButton: false,
             timer: 3000,
-          })
+          });
         }
-      }).catch((err: any) => {
+      } catch (err: any) {
         Swal.fire({
           title: 'Error!',
           text: err.response?.data?.message || 'Failed to fetch property details.',
@@ -267,15 +287,15 @@ export default defineComponent({
           toast: true,
           showConfirmButton: false,
           timer: 3000,
-        })
-      })
+        });
+      }
     },
     closeView() {
-      this.selectedProperty = null
-      this.showView = false
+      this.selectedProperty = null;
+      this.showView = false;
     },
     cancelAdding() {
-      this.closeForm()
+      this.closeForm();
     },
     async deleteProperty(id: number) {
       const result = await Swal.fire({
@@ -286,12 +306,12 @@ export default defineComponent({
         confirmButtonColor: '#d33',
         cancelButtonColor: '#3085d6',
         confirmButtonText: 'Yes, delete it!',
-      })
+      });
       if (result.isConfirmed) {
         try {
-          const response = await this.propertyStore.deleteProperty(id)
+          const response = await this.propertyStore.deleteProperty(id);
           if (response.status === 200) {
-            this.fetchProperties()
+            this.fetchProperties();
             Swal.fire({
               title: 'Deleted!',
               text: 'Property deleted successfully.',
@@ -300,7 +320,7 @@ export default defineComponent({
               toast: true,
               showConfirmButton: false,
               timer: 3000,
-            })
+            });
           }
         } catch (err: any) {
           const errorMessage =
@@ -308,7 +328,7 @@ export default defineComponent({
             'Failed to delete property.' +
               (err.response?.status === 422 && err.response?.data?.errors
                 ? '; ' + Object.values(err.response.data.errors).flat().join('; ')
-                : '')
+                : '');
           Swal.fire({
             title: 'Error!',
             text: errorMessage,
@@ -317,13 +337,13 @@ export default defineComponent({
             toast: true,
             showConfirmButton: false,
             timer: 3000,
-          })
+          });
         }
       }
     },
     debouncedSearch: Function as () => void,
   },
-})
+});
 </script>
 
 <style scoped>

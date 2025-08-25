@@ -43,7 +43,13 @@
         </VaValue>
 
         <div class="flex justify-between items-center mb-3">
-          <VaCheckbox v-model="formData.keepLoggedIn" label="Keep me signed in" />
+          <label>
+            <input
+              type="checkbox"
+              v-model="formData.keepLoggedIn"
+            />
+            Keep me signed in
+          </label>
           <RouterLink :to="{ name: 'recover-password' }" class="text-primary text-sm font-semibold">
             Forgot password?
           </RouterLink>
@@ -57,10 +63,12 @@
             id="pin"
             v-model="pinData.pin"
             :rules="[validators.required, validators.digits(4)]"
-            type="password"
+            type="text"
             maxlength="4"
             bordered
             class="w-full"
+            inputmode="numeric"
+            pattern="[0-9]*"
           />
         </div>
       </template>
@@ -81,9 +89,9 @@ import { defineComponent, ref, reactive, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useToast } from 'vuestic-ui';
 import { useAuthStore } from '../../stores/auth-store';
-import { AuthMiddleware } from '../../utils/authMiddleware';
 import { validators } from '../../services/utils';
 import EagerLogo from '../../components/EagerLogo.vue';
+import type { UserData, ErrorResponseData, ApiResponse } from '../../types/auth';
 
 export default defineComponent({
   name: 'Login',
@@ -109,24 +117,17 @@ export default defineComponent({
     const isLoggingIn = computed(() => authStore.loggingIn);
 
     onMounted(() => {
-      if (!AuthMiddleware.isSessionValid()) {
+      if (authStore.isAuthenticated) {
+        console.log('User already authenticated, redirecting to dashboard');
+        const redirectTo = authStore.getPostLoginRedirect();
+        router.replace(redirectTo);
+      } else {
         console.log('Clearing stale session data on login page mount');
-        AuthMiddleware.clearSession();
         authStore.clearAuthData();
       }
     });
 
-    const checkSessionAndRedirect = async () => {
-      if (AuthMiddleware.isSessionValid()) {
-        console.log('User already authenticated, redirecting to dashboard');
-        const dashboardRoute = AuthMiddleware.getDashboardRoute();
-        await router.replace({ name: dashboardRoute });
-        return true;
-      }
-      return false;
-    };
-
-    const submit = async () => {
+    async function submit() {
       if (isLoggingIn.value) return;
 
       try {
@@ -142,7 +143,7 @@ export default defineComponent({
       }
 
       try {
-        let response;
+        let response: ApiResponse<UserData | ErrorResponseData>;
         if (selectedTab.value === 'normal') {
           response = await authStore.login({
             login_method: 'email',
@@ -159,46 +160,57 @@ export default defineComponent({
         console.log('Login response:', response);
 
         if (response.status === 200 && response.data?.data) {
-          const userData = response.data.data;
-          console.log('User data:', userData);
+          const userData = response.data.data as UserData;
 
-          if (userData.requires_2fa) {
-            toast({ message: 'Please verify your email with the OTP sent', color: 'info' });
-            await router.push({
-              name: 'activate-account',
-              query: { email: userData.email, user_id: userData.id },
-            });
-            return;
-          }
-
-          AuthMiddleware.storeSession({ ...userData, keepLoggedIn: formData.keepLoggedIn });
-          authStore.storeUserData(userData);
-
-          await new Promise((resolve) => setTimeout(resolve, 100));
-
-          toast({ message: 'Login successful', color: 'success' });
-
-          const redirectPath = route.query.redirect as string || localStorage.getItem('redirect');
-          const enrollmentFlag = localStorage.getItem('enrollmentInProgress');
-
-          if (enrollmentFlag === 'true') {
-            localStorage.setItem('enrollmentInProgress', 'false');
-            const redirectRoute = redirectPath || AuthMiddleware.getDashboardRoute();
-            await router.replace(typeof redirectRoute === 'string' ? { path: redirectRoute } : { name: redirectRoute });
-            toast({
-              message: "You've successfully logged in. Please click on the 'Enroll' button.",
-              color: 'success',
-            });
-          } else {
-            const dashboardRoute = AuthMiddleware.getDashboardRoute();
-            if (redirectPath && redirectPath !== '/auth/login' && redirectPath !== '/') {
-              await router.replace({ path: redirectPath });
-            } else {
-              await router.replace({ name: dashboardRoute });
+          if ('id' in userData && 'role' in userData && userData.role) {
+            if (userData.requires_2fa) {
+              toast({ message: 'Please verify your email with the OTP sent', color: 'info' });
+              await router.push({
+                name: 'activate-account',
+                query: { email: userData.email || '', user_id: userData.id },
+              });
+              return;
             }
-          }
 
-          localStorage.removeItem('redirect');
+            authStore.storeUserData(userData);
+
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            toast({ message: 'Login successful', color: 'success' });
+
+            const redirectPathRaw = route.query.redirect as string | null || localStorage.getItem('redirect');
+            const redirectPath: string | undefined = redirectPathRaw ?? undefined;
+            const enrollmentFlag = localStorage.getItem('enrollmentInProgress');
+
+            if (enrollmentFlag === 'true') {
+              localStorage.setItem('enrollmentInProgress', 'false');
+              const redirectTo = authStore.getPostLoginRedirect(redirectPath);
+              await router.replace(redirectTo);
+              toast({
+                message: "You've successfully logged in. Please click on the 'Enroll' button.",
+                color: 'success',
+              });
+            } else {
+              const redirectTo = authStore.getPostLoginRedirect(redirectPath);
+              await router.replace(redirectTo);
+            }
+
+            localStorage.removeItem('redirect');
+          } else {
+            throw new Error('Invalid user data: id and role are required');
+          }
+        } else if (response.status === 403 && 'message' in response.data) {
+          const errorData = response.data as ErrorResponseData;
+          toast({ message: errorData.message || 'Please verify your email with the OTP sent', color: 'info' });
+          if (!errorData.email || !errorData.user_id) {
+            console.error('Missing email or user_id in 2FA response:', errorData);
+            throw new Error('Missing required fields for 2FA redirect');
+          }
+          await router.push({
+            name: 'activate-account',
+            query: { email: errorData.email, user_id: errorData.user_id },
+          });
+          return;
         } else {
           throw new Error('Invalid response from server');
         }
@@ -208,11 +220,12 @@ export default defineComponent({
           response: error.response?.data,
           status: error.response?.status,
         });
-        const errorMessage = error.message === 'No matching user found in response'
-          ? 'User not found. Please check your credentials.'
-          : error.message === 'Invalid user data: id, token, and role are required'
-          ? 'Invalid user data received from server. Please try again.'
-          : error.response?.data?.message || 'Login failed';
+        const errorMessage = error.response?.data?.message ||
+                            error.message === 'No matching user found in response'
+                              ? 'User not found. Please check your credentials.'
+                              : error.message === 'Invalid user data: id and role are required'
+                              ? 'Invalid user data received from server. Please try again.'
+                              : 'Login failed. Please check your credentials or contact support.';
         toast({ message: errorMessage, color: 'danger' });
 
         if (selectedTab.value === 'normal') {
@@ -223,9 +236,7 @@ export default defineComponent({
       } finally {
         authStore.loggingIn = false;
       }
-    };
-
-    checkSessionAndRedirect();
+    }
 
     return {
       selectedTab,

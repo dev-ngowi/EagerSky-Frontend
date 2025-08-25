@@ -4,7 +4,7 @@
       <div class="flex items-center space-x-4">
         <VaInput
           v-model="searchQuery"
-          placeholder="Search by property or client name"
+          placeholder="Search by property, room, or client name"
           class="w-64"
           @input="debouncedSearch"
         />
@@ -39,6 +39,15 @@
       >
         <template #cell(sn)="{ rowIndex }">
           {{ (pagination.current_page - 1) * pagination.per_page + rowIndex + 1 }}
+        </template>
+        <template #cell(properties_rooms)="{ rowData }">
+          <span v-if="rowData.booking_property_type_id === 1">
+            {{ rowData.properties?.map(p => p.title).join(', ') || 'None' }}
+          </span>
+          <span v-else-if="rowData.booking_property_type_id === 2">
+            {{ rowData.rooms?.map(r => r.room_number).join(', ') || 'None' }}
+          </span>
+          <span v-else>None</span>
         </template>
         <template #cell(status)="{ rowData }">
           <span :class="{
@@ -96,16 +105,26 @@
     <VaModal v-model="showView" size="medium" layout="centered" close-button hide-default-actions class="p-4">
       <div class="text-lg font-bold mb-4">{{ $t('Booking Details') }}</div>
       <div v-if="selectedBooking" class="space-y-2">
-        <p><strong>Property:</strong> {{ selectedBooking.property_title || 'None' }}</p>
+        <p><strong>Booking Type:</strong> {{ selectedBooking.booking_property_type_name || (selectedBooking.booking_property_type_id === 1 ? 'Property' : 'Room') }}</p>
+        <p v-if="selectedBooking.booking_property_type_id === 1">
+          <strong>Properties:</strong> {{ selectedBooking.properties?.map(p => p.title).join(', ') || 'None' }}
+        </p>
+        <p v-if="selectedBooking.booking_property_type_id === 2">
+          <strong>Rooms:</strong> {{ selectedBooking.rooms?.map(r => r.room_number).join(', ') || 'None' }}
+        </p>
         <p><strong>Client:</strong> {{ selectedBooking.client_fullname || 'None' }}</p>
         <p><strong>Appointment Type:</strong> {{ selectedBooking.appointment_type_name || 'None' }}</p>
-        <p><strong>Date:</strong> {{ selectedBooking.date || 'None' }}</p>
-        <p><strong>Duration (minutes):</strong> {{ selectedBooking.duration || 'None' }}</p>
+        <p><strong>Date:</strong> {{ formatDate(new Date(selectedBooking.date), 'd MMMM yyyy') || 'None' }}</p>
+        <p>
+          <strong>Duration:</strong> 
+          {{ selectedBooking.duration || 'None' }} minutes
+        </p>
         <p><strong>Time Slot:</strong> {{ selectedBooking.time_slot || 'None' }}</p>
         <p><strong>Recurrence:</strong> {{ selectedBooking.recurrence || 'None' }}</p>
         <p><strong>Status:</strong> {{ selectedBooking.status || 'None' }}</p>
-        <p><strong>Created At:</strong> {{ selectedBooking.created_at || 'None' }}</p>
-        <p><strong>Updated At:</strong> {{ selectedBooking.updated_at || 'None' }}</p>
+        <p><strong>Notes:</strong> {{ selectedBooking.notes || 'None' }}</p>
+        <p><strong>Created At:</strong> {{ formatDate(selectedBooking.created_at, 'd MMMM yyyy HH:mm') || 'None' }}</p>
+        <p><strong>Updated At:</strong> {{ formatDate(selectedBooking.updated_at, 'd MMMM yyyy HH:mm') || 'None' }}</p>
       </div>
       <div class="flex justify-end mt-4">
         <VaButton color="secondary" @click="closeView">Close</VaButton>
@@ -122,6 +141,7 @@ import Swal from 'sweetalert2';
 import { debounce } from 'lodash';
 import makeRequest from '../../../../services/makeRequest';
 import { format } from 'date-fns';
+
 import type { 
   Booking, 
   FormData, 
@@ -140,7 +160,7 @@ export default defineComponent({
     return {
       columns: [
         { key: 'sn', sortable: false, label: 'SN' },
-        { key: 'property_title', sortable: true, label: 'Property' },
+        { key: 'properties_rooms', sortable: false, label: 'Properties/Rooms' },
         { key: 'client_fullname', sortable: true, label: 'Client' },
         { key: 'appointment_type_name', sortable: true, label: 'Appointment Type' },
         { key: 'date', sortable: true, label: 'Date' },
@@ -175,48 +195,63 @@ export default defineComponent({
     this.getBookings({ page: 1, per_page: 10 });
   },
   methods: {
+    formatDate(date: Date | string, formatString: string) {
+      return format(new Date(date), formatString);
+    },
     async getBookings(params: GetBookingsParams = {}) {
       this.loadingBookings = true;
       try {
-        console.log('Fetching bookings with params:', params); // Debug log
+        console.log('Fetching bookings with params:', params);
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/bookings`,
           method: 'get',
-          requiresAuth: true, // Align with BookingController authentication
+          requiresAuth: true,
           params: {
             page: params.page || 1,
             per_page: params.per_page || this.pagination.per_page,
             search: params.search || '',
           },
         });
-        console.log('API response:', response.data); // Debug log
+        console.log('API response:', response.data);
         if (response.status === 200 && 'data' in response.data && 'pagination' in response.data) {
           this.bookings = response.data.data
-            .filter((booking: any) => booking && booking.id)
+            .filter((booking: any) => booking && booking.booking_id)
             .map((booking: any): Booking => ({
-              id: booking.id,
-              property_id: booking.property_id,
-              property_title: booking.property_title || 'None',
-              client_id: booking.client_id,
-              client_fullname: booking.client_fullname || 'None', // Ensure non-null string
-              appointment_type_id: booking.appointment_type_id,
-              appointment_type_name: booking.appointment_type_name || 'None',
-              date: format(new Date(booking.date), 'd MMMM yyyy HH:mm'),
-              duration: booking.duration,
+              id: Number(booking.booking_id),
+              booking_property_type_id: Number(booking.booking_property_type_id),
+              booking_property_type_name: booking.booking_property_type?.name || (booking.booking_property_type_id === 1 ? 'Property' : 'Room'),
+              properties: booking.properties?.map((p: any) => ({
+                id: Number(p.id),
+                title: p.title || `Property ${p.id}`,
+              })) || [],
+              rooms: booking.rooms?.map((r: any) => ({
+                room_id: Number(r.room_id),
+                room_number: r.room_number || `Room ${r.room_id}`,
+                property_id: r.property_id ? Number(r.property_id) : undefined,
+              })) || [],
+              client_id: Number(booking.client_id),
+              client_fullname: booking.client ? `${booking.client.first_name || ''} ${booking.client.last_name || ''}`.trim() || 'Unknown Client' : 'Unknown Client',
+              appointment_type_id: Number(booking.appointment_type_id),
+              appointment_type_name: booking.appointment_type?.name || 'Unknown Type',
+              date: booking.date,
+              duration: Number(booking.duration),
               time_slot: booking.time_slot,
               recurrence: booking.recurrence || 'None',
-              status: booking.status,
-              created_at: format(new Date(booking.created_at), 'd MMMM yyyy'),
-              updated_at: format(new Date(booking.updated_at), 'd MMMM yyyy'),
+              status: booking.status || 'pending',
+              notes: booking.notes ?? '',
+              created_at: booking.created_at,
+              updated_at: booking.updated_at,
+              deleted_at: booking.deleted_at || null,
             }));
           this.pagination = {
-            total: response.data.pagination?.total ?? 0,
-            per_page: Number(response.data.pagination?.per_page) || params.per_page || 10,
+            total: response.data.pagination?.total_items ?? 0,
+            per_page: Number(response.data.pagination?.items_per_page) || params.per_page || 10,
             current_page: Number(response.data.pagination?.current_page) || params.page || 1,
-            last_page: Number(response.data.pagination?.last_page) || 1,
+            last_page: Number(response.data.pagination?.total_pages) || 1,
           };
-          console.log('Updated pagination:', this.pagination); // Debug log
-          if (response.data.data.length === 0) {
+          console.log('Transformed bookings:', this.bookings);
+          console.log('Updated pagination:', this.pagination);
+          if (this.bookings.length === 0) {
             Swal.fire({
               title: 'Info',
               text: 'No bookings found. Add some bookings to get started.',
@@ -253,18 +288,38 @@ export default defineComponent({
         });
       } finally {
         this.loadingBookings = false;
+        this.componentKey += 1;
       }
     },
 
     async addBooking(payload: FormData) {
+      if (!payload || typeof payload !== 'object') {
+        console.error('addBooking error: Payload is undefined or invalid', payload);
+        Swal.fire({
+          title: 'Error!',
+          text: 'Invalid booking data provided.',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+        throw new Error('Payload is undefined or invalid');
+      }
       this.submitting = true;
       try {
+        console.log('Sending booking payload:', payload);
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/bookings`,
           method: 'post',
           requiresAuth: true,
-          data: payload,
+          data: {
+            ...payload,
+            room_ids: payload.booking_property_type_id === 2 ? payload.room_ids || [] : [],
+            property_ids: payload.booking_property_type_id === 1 ? payload.property_ids || [] : [],
+          },
         });
+        console.log('addBooking response:', response.data);
         if (response.status === 201) {
           await this.getBookings({
             page: this.pagination.current_page,
@@ -302,13 +357,30 @@ export default defineComponent({
     },
 
     async updateBooking(payload: FormData & { id: number }) {
+      if (!payload || typeof payload !== 'object' || !payload.id) {
+        console.error('updateBooking error: Payload is undefined or invalid', payload);
+        Swal.fire({
+          title: 'Error!',
+          text: 'Invalid booking data provided for update.',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+        throw new Error('Payload is undefined or invalid');
+      }
       this.submitting = true;
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/bookings/${payload.id}`,
           method: 'put',
           requiresAuth: true,
-          data: payload,
+          data: {
+            ...payload,
+            room_ids: payload.booking_property_type_id === 2 ? payload.room_ids || [] : [],
+            property_ids: payload.booking_property_type_id === 1 ? payload.property_ids || [] : [],
+          },
         });
         if (response.status === 200) {
           await this.getBookings({
@@ -430,9 +502,12 @@ export default defineComponent({
 
     confirmDelete(booking: Booking) {
       this.selectedBooking = booking;
+      const title = booking.booking_property_type_id === 1 
+        ? booking.properties?.map(p => p.title).join(', ') || 'None'
+        : booking.rooms?.map(r => r.room_number).join(', ') || 'None';
       Swal.fire({
         title: 'Are you sure?',
-        text: `You are about to delete the booking for "${booking.property_title}" on ${booking.date}. This action cannot be undone.`,
+        text: `You are about to delete the booking for "${title}" on ${format(new Date(booking.date), 'd MMMM yyyy')}. This action cannot be undone.`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
@@ -468,11 +543,28 @@ export default defineComponent({
       this.componentKey += 1;
     },
 
-    async handleAddSubmit(payload: FormData) {
+    async handleAddSubmit(payload: FormData | undefined) {
       if (this.submitting) return;
-      await this.addBooking(payload);
-      this.closeForm();
-      this.componentKey += 1;
+      if (!payload || typeof payload !== 'object') {
+        console.error('handleAddSubmit error: Payload is undefined or invalid', payload);
+        Swal.fire({
+          title: 'Error!',
+          text: 'Invalid booking data provided.',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+        return;
+      }
+      try {
+        await this.addBooking(payload);
+        this.closeForm();
+        this.componentKey += 1;
+      } catch (error) {
+        console.error('handleAddSubmit error:', error);
+      }
     },
 
     async handleEditSubmit(payload: FormData & { id: number }) {
@@ -489,9 +581,13 @@ export default defineComponent({
         });
         return;
       }
-      await this.updateBooking(payload);
-      this.componentKey += 1;
-      this.closeForm();
+      try {
+        await this.updateBooking(payload);
+        this.componentKey += 1;
+        this.closeForm();
+      } catch (error) {
+        console.error('handleEditSubmit error:', error);
+      }
     },
 
     async handlePageChange(page: number) {
@@ -499,17 +595,17 @@ export default defineComponent({
         console.warn(`Invalid page number: ${page}, last_page: ${this.pagination.last_page}`);
         return;
       }
-      this.pagination.current_page = page; // Update current_page before fetching
+      this.pagination.current_page = page;
       await this.getBookings({
         page,
         per_page: this.pagination.per_page,
         search: this.searchQuery,
       });
-      this.componentKey += 1; // Force re-render
+      this.componentKey += 1;
     },
 
     async handleSearch() {
-      this.pagination.current_page = 1; // Reset to first page on search
+      this.pagination.current_page = 1;
       await this.getBookings({
         page: 1,
         per_page: this.pagination.per_page,

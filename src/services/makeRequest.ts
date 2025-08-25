@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosRequestConfig, AxiosResponse, AxiosProgressEvent } from 'axios';
 
 interface IRequestParams {
   method: 'get' | 'post' | 'put' | 'delete' | 'patch' | 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -8,17 +8,17 @@ interface IRequestParams {
   params?: Record<string, any>;
   responseType?: 'json' | 'blob';
   requiresAuth?: boolean;
+  onUploadProgress?: (progressEvent: AxiosProgressEvent) => void; // Added to support upload progress
+  signal?: AbortSignal;
 }
 
 async function makeRequest<T = any>(options: IRequestParams): Promise<AxiosResponse<T>> {
   let token: string | null = null;
   if (options.requiresAuth) {
-    // Prioritize authToken to match auth-store.ts
     token = localStorage.getItem('authToken');
     if (token) {
       console.log('Token found in localStorage under key: authToken', { token });
     } else {
-      // Fallback to other possible token keys
       const possibleTokenKeys = ['auth_token', 'token', 'access_token', 'jwt'];
       for (const key of possibleTokenKeys) {
         token = localStorage.getItem(key);
@@ -27,26 +27,25 @@ async function makeRequest<T = any>(options: IRequestParams): Promise<AxiosRespo
           break;
         }
       }
-      // Try userProfile.token as last resort
       if (!token) {
-        const userProfileString = localStorage.getItem('userProfile');
+        const userProfileString = localStorage.getItem('userData');
         if (userProfileString) {
           try {
             const userProfile = JSON.parse(userProfileString);
             token = userProfile.token || null;
             if (token) {
-              console.log('Token found in localStorage.userProfile.token', { token });
+              console.log('Token found in localStorage.userData.token', { token });
             } else {
-              console.error('No token field found in userProfile:', userProfile);
+              console.error('No token field found in userData:', userProfile);
             }
           } catch (error) {
-            console.error('Failed to parse userProfile from localStorage:', error);
+            console.error('Failed to parse userData from localStorage:', error);
           }
         }
-      }
-      if (!token) {
-        console.error('No authentication token found in localStorage for keys:', ['authToken', ...possibleTokenKeys], 'or userProfile.token for request to:', options.url);
-        throw new Error(`No authentication token found for request to ${options.url}. Please log in again.`);
+        if (!token) {
+          console.error('No authentication token found in localStorage for keys:', ['authToken', ...possibleTokenKeys], 'or userData.token for request to:', options.url);
+          throw new Error(`No authentication token found for request to ${options.url}. Please log in again.`);
+        }
       }
     }
   }
@@ -56,14 +55,15 @@ async function makeRequest<T = any>(options: IRequestParams): Promise<AxiosRespo
     url: options.url,
     headers: {
       Accept: 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(token && options.requiresAuth ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
     responseType: options.responseType || 'json',
-    withCredentials: true,
+    withCredentials: options.requiresAuth, // Only send credentials for authenticated requests
+    onUploadProgress: options.onUploadProgress, // Pass onUploadProgress to Axios
+    signal: options.signal,
   };
 
-  // Ensure headers is defined
   config.headers = config.headers || {};
 
   if (options.data instanceof FormData) {
@@ -84,6 +84,7 @@ async function makeRequest<T = any>(options: IRequestParams): Promise<AxiosRespo
     headers: config.headers,
     data: options.data instanceof FormData ? 'FormData' : options.data,
     params: options.params,
+    signal: options.signal ? 'AbortSignal' : undefined, // Log signal presence
   });
 
   try {
@@ -130,12 +131,15 @@ async function makeRequest<T = any>(options: IRequestParams): Promise<AxiosRespo
             throw new Error(`HTTP ${responseStatus}: Failed to parse JSON response from the server.`);
           }
         } else {
-          throw new Error(`HTTP ${responseStatus}: The server returned a non-JSON response.`);
+          throw new Error(`HTTP ${responseStatus}: The server returned a non-JSON response: ${responseData}`);
         }
       }
 
       if (typeof responseData === 'object' && responseData !== null) {
         const message = responseData.message || responseData.error || error.message || 'An unknown error occurred.';
+        if (responseStatus === 500) {
+          throw new Error(`Server error: ${message}. Please check server logs for details.`);
+        }
         throw new Error(`HTTP ${responseStatus}: ${message}`);
       }
     }

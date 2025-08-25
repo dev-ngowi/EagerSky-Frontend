@@ -43,17 +43,6 @@
         <template #cell(is_certified)="{ rowData }">
           {{ rowData.is_certified === true ? 'Yes' : rowData.is_certified === false ? 'No' : rowData.is_certified }}
         </template>
-        <template #cell(certificate_path)="{ rowData }">
-          <a
-            v-if="rowData.certificate_path && rowData.certificate_path !== 'Restricted'"
-            @click.prevent="downloadCertificate(rowData.certificate_path)"
-            class="text-blue-600 hover:underline"
-          >
-            View Certificate
-          </a>
-          <span v-else-if="rowData.certificate_path === 'Restricted'">Restricted</span>
-          <span v-else>Not Available</span>
-        </template>
         <template #cell(created_at)="{ rowData }">
           {{ rowData.created_at_formatted || 'N/A' }}
         </template>
@@ -82,6 +71,16 @@
             :disabled="!isAdmin"
             @click="openForm(rowData, 'edit')"
           />
+          <VaButton
+            v-if="rowData.certificate_path && rowData.certificate_path !== 'Restricted'"
+            size="small"
+            color="info"
+            icon="picture_as_pdf"
+            class="ml-2"
+            @click="downloadCertificate(rowData.certificate_path)"
+          >
+            View PDF
+          </VaButton>
           <VaButton
             v-if="!rowData.raw_deleted_at"
             size="small"
@@ -177,20 +176,6 @@
             </p>
           </div>
           <div>
-            <p class="text-sm font-medium text-gray-600">Certificate</p>
-            <div class="text-base">
-              <a
-                v-if="selectedContractor.certificate_path && selectedContractor.certificate_path !== 'Restricted'"
-                @click.prevent="downloadCertificate(selectedContractor.certificate_path)"
-                class="text-blue-600 hover:underline"
-              >
-                View Certificate
-              </a>
-              <span v-else-if="selectedContractor.certificate_path === 'Restricted'">Restricted</span>
-              <span v-else>Not Available</span>
-            </div>
-          </div>
-          <div>
             <p class="text-sm font-medium text-gray-600">License Number</p>
             <p class="text-base">{{ selectedContractor.license_number || 'N/A' }}</p>
           </div>
@@ -278,7 +263,6 @@ export default defineComponent({
         { key: 'contact', sortable: true, label: 'Contact' },
         { key: 'specialty', sortable: true, label: 'Specialty' },
         { key: 'is_certified', sortable: true, label: 'Certified' },
-        { key: 'certificate_path', sortable: false, label: 'Certificate' },
         { key: 'license_number', sortable: true, label: 'License Number' },
         { key: 'contract_time_limit', sortable: true, label: 'Contract Time Limit' },
         { key: 'construction_status', sortable: true, label: 'Construction Status' },
@@ -334,7 +318,7 @@ export default defineComponent({
             contact: contractor.contact ?? 'Restricted',
             specialty: contractor.specialty ?? 'N/A',
             is_certified: contractor.is_certified !== undefined ? contractor.is_certified : null,
-            certificate_path: contractor.certificate_path ?? 'Restricted',
+            certificate_path: contractor.certificate_path ?? null,
             license_number: contractor.license_number ?? 'Restricted',
             raw_contract_time_limit: contractor.contract_time_limit ?? null,
             contract_time_limit_formatted: contractor.contract_time_limit
@@ -409,64 +393,92 @@ export default defineComponent({
     },
 
     async downloadCertificate(path: string) {
-    try {
-        console.log('Downloading certificate from:', path);
+      if (!path) {
+        Swal.fire({
+          title: 'Error!',
+          text: 'No certificate available for download.',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+        return;
+      }
+
+      // Ensure the path includes the /api prefix
+      const correctedPath = path.replace('/v1/contractors/certificates/', '/api/v1/contractors/certificates/');
+
+      try {
+        console.log('Downloading certificate from:', correctedPath);
+        console.log('Auth token:', localStorage.getItem('auth_token'));
         const response = await makeRequest({
-            url: path,
-            method: 'get',
-            headers: {
-                Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
-                Accept: 'application/pdf',
-            },
-            responseType: 'blob',
+          url: `${correctedPath}?download=1`,
+          method: 'get',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+            Accept: 'application/pdf',
+          },
+          responseType: 'blob',
         });
 
         const contentType = response.headers['content-type'];
         if (!contentType.includes('application/pdf')) {
-            throw new Error('Invalid file type received');
+          const text = await response.data.text();
+          let errorMessage = 'Invalid file type received';
+          try {
+            const jsonError = JSON.parse(text);
+            errorMessage = jsonError.message || errorMessage;
+          } catch (e) {
+            console.error('Failed to parse error response:', text);
+          }
+          throw new Error(errorMessage);
         }
 
+        const filename = path.split('/').pop() || 'certificate.pdf';
         const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', path.split('/').pop() || 'certificate.pdf');
+        link.setAttribute('download', filename);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
 
         Swal.fire({
-            title: 'Success!',
-            text: 'Certificate downloaded successfully.',
-            icon: 'success',
-            position: 'top-end',
-            toast: true,
-            showConfirmButton: false,
-            timer: 1500,
+          title: 'Success!',
+          text: 'Certificate downloaded successfully.',
+          icon: 'success',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 1500,
         });
-    } catch (error: any) {
+      } catch (error: any) {
         console.error('Download error:', error);
         let errorMessage = 'Failed to download certificate.';
         if (error.response?.status === 404) {
-            errorMessage = 'Certificate file not found.';
+          errorMessage = 'Certificate file not found.';
         } else if (error.response?.status === 401) {
-            errorMessage = 'Unauthorized access. Please log in again.';
+          errorMessage = 'Unauthorized access. Please log in again.';
         } else if (error.response?.data?.message) {
-            errorMessage = error.response.data.message;
+          errorMessage = error.response.data.message;
         } else if (error.message.includes('CORS')) {
-            errorMessage = 'CORS error: The server blocked the request. Please contact the administrator.';
+          errorMessage = 'CORS error: The server blocked the request. Please contact the administrator.';
+        } else if (error.message) {
+          errorMessage = error.message;
         }
         Swal.fire({
-            title: 'Error!',
-            text: errorMessage,
-            icon: 'error',
-            position: 'top-end',
-            toast: true,
-            showConfirmButton: false,
-            timer: 3000,
+          title: 'Error!',
+          text: errorMessage,
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
         });
-    }
-},
+      }
+    },
 
     async addContractor(payload: FormData) {
       this.submitting = true;

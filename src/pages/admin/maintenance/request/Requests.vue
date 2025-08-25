@@ -1,30 +1,40 @@
 <template>
-  <div class="bg-white shadow-md rounded-lg p-6">
+  <div class="container">
+ <div class="bg-white shadow-md rounded-lg p-6">
     <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold">Maintenance Requests</h2>
       <div class="flex items-center space-x-4">
         <VaInput
           v-model="searchQuery"
-          placeholder="Search by property, user, contractor, description, or status"
+          placeholder="Search by property, user, description, or status"
           class="w-64"
           @input="debouncedSearch"
         />
-      </div>
-      <div class="flex space-x-2">
-        <VaButton v-if="addEditForm" icon="close" color="success" size="small" class="px-4" @click="cancelAdding">
-          Done
-        </VaButton>
-        <VaButton
-          v-if="!addEditForm"
-          icon="add"
-          color="#00A3E0"
-          size="small"
-          class="px-4"
-          @click="openForm(null, 'add')"
-        >
-          {{ $t('Add Maintenance Request', 'Add Maintenance Request') }}
-        </VaButton>
+        <div class="flex space-x-2">
+          <VaButton
+            v-if="addEditForm"
+            icon="close"
+            color="success"
+            size="small"
+            class="px-4"
+            @click="cancelAdding"
+          >
+            Done
+          </VaButton>
+          <VaButton
+            v-if="!addEditForm"
+            icon="add"
+            color="#00A3E0"
+            size="small"
+            class="px-4"
+            @click="openForm(null, 'add')"
+          >
+            {{ $t('Add Maintenance Request', 'Add Maintenance Request') }}
+          </VaButton>
+        </div>
       </div>
     </div>
+
     <template v-if="!addEditForm">
       <VaDataTable
         :key="componentKey"
@@ -34,6 +44,7 @@
         :loading="loadingMaintenanceRequests"
         :per-page="pagination.per_page"
         :current-page="pagination.current_page"
+        :hoverable="true"
         @update:currentPage="handlePageChange"
       >
         <template #cell(sn)="{ rowIndex }">
@@ -59,6 +70,26 @@
         <template #cell(actions)="{ rowData }">
           <VaButton size="small" color="primary" icon="visibility" @click="openView(rowData)" />
           <VaButton size="small" color="warning" icon="edit" class="ml-2" @click="openForm(rowData, 'edit')" />
+          <VaButton
+            v-if="rowData.contractor_assignment_id && Number.isInteger(rowData.contractor_assignment_id) && rowData.contractor_assignment_id > 0"
+            size="small"
+            color="info"
+            icon="track_changes"
+            class="ml-2"
+            @click="openTrackProgress(rowData.contractor_assignment_id)"
+          >
+            Track Progress
+          </VaButton>
+          <VaButton
+            v-else
+            size="small"
+            color="info"
+            icon="person_add"
+            class="ml-2"
+            @click="openAssignContractor(rowData)"
+          >
+            Assign Contractor
+          </VaButton>
           <VaButton size="small" color="danger" icon="delete" class="ml-2" @click="confirmDelete(rowData)" />
         </template>
       </VaDataTable>
@@ -94,6 +125,12 @@
         @close="closeForm"
         @submit="debouncedHandleSubmit"
       />
+      <AssignContractor
+        v-if="formMode === 'assign' && selectedMaintenanceRequest"
+        :maintenance-request="selectedMaintenanceRequest"
+        @close="closeForm"
+        @submit="handleContractorAssignment"
+      />
     </template>
 
     <!-- View Modal -->
@@ -102,9 +139,9 @@
       <div v-if="selectedMaintenanceRequest" class="space-y-2">
         <p><strong>Property:</strong> {{ selectedMaintenanceRequest.property_title || 'N/A' }}</p>
         <p><strong>User:</strong> {{ selectedMaintenanceRequest.user_name || 'N/A' }}</p>
-        <p><strong>Contractor:</strong> {{ selectedMaintenanceRequest.contractor_name || 'N/A' }}</p>
         <p><strong>Description:</strong> {{ selectedMaintenanceRequest.description || 'N/A' }}</p>
         <p><strong>Status:</strong> {{ selectedMaintenanceRequest.status || 'N/A' }}</p>
+        <p><strong>Contractor:</strong> {{ selectedMaintenanceRequest.contractor_name || 'Not Assigned' }}</p>
         <p><strong>Updated At:</strong> {{ selectedMaintenanceRequest.updated_at_formatted || 'N/A' }}</p>
         <p v-if="selectedMaintenanceRequest.raw_deleted_at">
           <strong>Deleted At:</strong> {{ selectedMaintenanceRequest.deleted_at_formatted || 'N/A' }}
@@ -114,76 +151,105 @@
         <VaButton color="secondary" @click="closeView">Close</VaButton>
       </div>
     </VaModal>
+
+    <!-- Track Progress Modal -->
+    <VaModal
+      v-model="showTrackProgress"
+      :title="$t('Track Contractor Progress', 'Track Contractor Progress')"
+      size="medium"
+      close-button
+      @ok="closeTrackProgress"
+      @cancel="closeTrackProgress"
+    >
+      <TrackContractorProgress
+        v-if="selectedAssignmentId && Number.isInteger(selectedAssignmentId) && selectedAssignmentId > 0"
+        :assignment-id="selectedAssignmentId"
+        @update="handleProgressUpdated"
+        @close="closeTrackProgress"
+      />
+      <div v-else class="text-red-500">
+        Error: Invalid contractor assignment ID.
+      </div>
+    </VaModal>
+  </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue';
+import { defineComponent, ref } from 'vue';
 import MaintenanceRequestForm from './MaintenanceRequestForm.vue';
 import MaintenanceRequestEdit from './MaintenanceRequestEdit.vue';
+import AssignContractor from '../assign/AssignContractor.vue';
+import TrackContractorProgress from '../progress/TrackContractorProgress.vue';
 import makeRequest from '../../../../services/makeRequest';
 import Swal from 'sweetalert2';
 import { debounce } from 'lodash';
 import { format, parseISO, isValid } from 'date-fns';
 import type { MaintenanceRequest, Payload, Pagination } from '../../../../types/maintenanceRequest';
-import { useRouter } from 'vue-router';
 
 export default defineComponent({
   name: 'MaintenanceRequestList',
   components: {
     MaintenanceRequestForm,
     MaintenanceRequestEdit,
+    AssignContractor,
+    TrackContractorProgress,
   },
-  data() {
-    return {
-      columns: [
-        { key: 'sn', sortable: false, label: 'SN' },
-        { key: 'property_title', sortable: true, label: 'Property' },
-        { key: 'user_name', sortable: true, label: 'User' },
-        { key: 'contractor_name', sortable: true, label: 'Contractor' },
-        { key: 'description', sortable: true, label: 'Description' },
-        { key: 'status', sortable: true, label: 'Status' },
-        { key: 'updated_at', sortable: true, label: 'Updated At' },
-        { key: 'deleted_at', sortable: true, label: 'Deleted At' },
-        { key: 'actions', sortable: false, label: 'Actions' },
-      ],
-      maintenanceRequests: [] as MaintenanceRequest[],
-      loadingMaintenanceRequests: false as boolean,
-      pagination: {
-        total: 0,
-        per_page: 10,
-        current_page: 1,
-        last_page: 1,
-      } as Pagination,
-      addEditForm: false as boolean,
-      showView: false as boolean,
-      selectedMaintenanceRequest: null as MaintenanceRequest | null,
-      formMode: 'add' as 'add' | 'edit',
-      componentKey: 0 as number,
-      deleting: false as boolean,
-      submitting: false as boolean,
-      updatingStatus: false as boolean,
-      updatingId: null as number | null,
-      searchQuery: '' as string,
-      statusOptions: [
-        { value: 'pending', text: 'Pending' },
-        { value: 'in_progress', text: 'In Progress' },
-        { value: 'completed', text: 'Completed' },
-      ],
-      debouncedSearch: null as unknown as () => void,
-      debouncedHandleSubmit: null as unknown as (payload: Payload, mode: 'add' | 'edit') => void,
-    };
-  },
-  created() {
-    this.debouncedSearch = debounce(this.handleSearch, 500);
-    this.debouncedHandleSubmit = debounce(this.handleSubmit, 1000, { leading: true, trailing: false });
-  },
-  mounted() {
-    this.getMaintenanceRequests({ page: 1, per_page: 10 });
-  },
-  methods: {
-    async getMaintenanceRequests(params: { page?: number; per_page?: number; search?: string } = {}) {
-      this.loadingMaintenanceRequests = true;
+  setup() {
+    const maintenanceRequests = ref<MaintenanceRequest[]>([]);
+    const loadingMaintenanceRequests = ref<boolean>(false);
+    const addEditForm = ref<boolean>(false);
+    const showView = ref<boolean>(false);
+    const showTrackProgress = ref<boolean>(false);
+    const selectedMaintenanceRequest = ref<MaintenanceRequest | null>(null);
+    const selectedAssignmentId = ref<number | null>(null);
+    const formMode = ref<'add' | 'edit' | 'assign'>('add');
+    const componentKey = ref<number>(0);
+    const deleting = ref<boolean>(false);
+    const submitting = ref<boolean>(false);
+    const updatingStatus = ref<boolean>(false);
+    const updatingId = ref<number | null>(null);
+    const searchQuery = ref<string>('');
+    const pagination = ref<Pagination>({
+      total: 0,
+      per_page: 10,
+      current_page: 1,
+      last_page: 1,
+    });
+
+    const statusOptions = [
+      { value: 'pending', text: 'Pending' },
+      { value: 'in_progress', text: 'In Progress' },
+      { value: 'completed', text: 'Completed' },
+    ];
+
+    const columns = [
+      { key: 'sn', sortable: false, label: 'SN' },
+      { key: 'property_title', sortable: true, label: 'Property' },
+      { key: 'user_name', sortable: true, label: 'User' },
+      { key: 'description', sortable: true, label: 'Description' },
+      { key: 'status', sortable: true, label: 'Status' },
+      { key: 'contractor_name', label: 'Contractor' },
+      { key: 'updated_at', sortable: true, label: 'Updated At' },
+      { key: 'deleted_at', sortable: true, label: 'Deleted At' },
+      { key: 'actions', sortable: false, label: 'Actions' },
+    ];
+
+    const debouncedSearch = debounce(() => {
+      getMaintenanceRequests({
+        page: 1,
+        per_page: pagination.value.per_page,
+        search: searchQuery.value,
+      });
+      componentKey.value += 1;
+    }, 500);
+
+    const debouncedHandleSubmit = debounce((payload: Payload, mode: 'add' | 'edit') => {
+      handleSubmit(payload, mode);
+    }, 1000, { leading: true, trailing: false });
+
+    const getMaintenanceRequests = async (params: { page?: number; per_page?: number; search?: string } = {}) => {
+      loadingMaintenanceRequests.value = true;
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/maintenance-requests`,
@@ -193,22 +259,22 @@ export default defineComponent({
             Accept: 'application/json',
           },
           params: {
-            page: params.page || this.pagination.current_page,
-            per_page: params.per_page || this.pagination.per_page,
-            search: params.search || this.searchQuery,
+            page: params.page || pagination.value.current_page,
+            per_page: params.per_page || pagination.value.per_page,
+            search: params.search || searchQuery.value,
           },
         });
         if (response.status === 200) {
-          this.maintenanceRequests = response.data.data.map((request: any) => ({
+          maintenanceRequests.value = response.data.data.map((request: any) => ({
             id: Number(request.id),
             property_id: request.property_id !== null ? Number(request.property_id) : null,
             property_title: request.property_title || 'N/A',
             user_id: request.user_id !== null ? Number(request.user_id) : null,
             user_name: request.user_name || 'N/A',
-            contractor_id: request.contractor_id !== null ? Number(request.contractor_id) : null,
-            contractor_name: request.contractor_name || 'N/A',
             description: request.description || 'N/A',
-            status: request.status || 'N/A',
+            status: request.status || 'pending',
+            contractor_name: request.contractor_name || 'Not Assigned',
+            contractor_assignment_id: request.contractor_assignment_id ? Number(request.contractor_assignment_id) : null,
             raw_updated_at: request.updated_at || null,
             updated_at_formatted: request.updated_at
               ? isValid(parseISO(request.updated_at))
@@ -222,13 +288,13 @@ export default defineComponent({
                 : 'N/A'
               : 'N/A',
           }));
-          this.pagination = {
+          pagination.value = {
             total: response.data.pagination?.total || response.data.data.length,
             per_page: response.data.pagination?.per_page || params.per_page || 10,
             current_page: response.data.pagination?.current_page || params.page || 1,
             last_page: response.data.pagination?.last_page || 1,
           };
-          if (this.maintenanceRequests.length === 0) {
+          if (maintenanceRequests.value.length === 0) {
             Swal.fire({
               title: 'Info',
               text: 'No maintenance requests found. Add some requests to get started.',
@@ -262,7 +328,10 @@ export default defineComponent({
               localStorage.removeItem('access_token');
               localStorage.removeItem('jwt');
               localStorage.removeItem('userProfile');
-              this.$router.push('/login');
+              import('vue-router').then(({ useRouter }) => {
+                const router = useRouter();
+                router.push('/login');
+              });
             }
           });
           return;
@@ -277,12 +346,12 @@ export default defineComponent({
           timer: 3000,
         });
       } finally {
-        this.loadingMaintenanceRequests = false;
+        loadingMaintenanceRequests.value = false;
       }
-    },
+    };
 
-    async addMaintenanceRequest(payload: Payload) {
-      this.submitting = true;
+    const addMaintenanceRequest = async (payload: Payload) => {
+      submitting.value = true;
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/maintenance-requests`,
@@ -295,24 +364,24 @@ export default defineComponent({
           data: payload,
         });
         if (response.status === 201) {
-          await this.getMaintenanceRequests({
-            page: this.pagination.current_page,
-            per_page: this.pagination.per_page,
-            search: this.searchQuery,
+          await getMaintenanceRequests({
+            page: pagination.value.current_page,
+            per_page: pagination.value.per_page,
+            search: searchQuery.value,
           });
-          this.componentKey += 1;
+          componentKey.value += 1;
         }
         return response;
       } catch (error: any) {
         console.error('addMaintenanceRequest error:', error.response?.data || error);
         throw error;
       } finally {
-        this.submitting = false;
+        submitting.value = false;
       }
-    },
+    };
 
-    async updateMaintenanceRequest(payload: Payload) {
-      this.submitting = true;
+    const updateMaintenanceRequest = async (payload: Payload) => {
+      submitting.value = true;
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/maintenance-requests/${payload.id}`,
@@ -325,25 +394,25 @@ export default defineComponent({
           data: payload,
         });
         if (response.status === 200) {
-          await this.getMaintenanceRequests({
-            page: this.pagination.current_page,
-            per_page: this.pagination.per_page,
-            search: this.searchQuery,
+          await getMaintenanceRequests({
+            page: pagination.value.current_page,
+            per_page: pagination.value.per_page,
+            search: searchQuery.value,
           });
-          this.componentKey += 1;
+          componentKey.value += 1;
         }
         return response;
       } catch (error: any) {
         console.error('updateMaintenanceRequest error:', error.response?.data || error);
         throw error;
       } finally {
-        this.submitting = false;
+        submitting.value = false;
       }
-    },
+    };
 
-    async updateStatus(maintenanceRequest: MaintenanceRequest, newStatus: string) {
-      this.updatingStatus = true;
-      this.updatingId = maintenanceRequest.id;
+    const updateStatus = async (maintenanceRequest: MaintenanceRequest, newStatus: string) => {
+      updatingStatus.value = true;
+      updatingId.value = maintenanceRequest.id;
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/maintenance-requests/${maintenanceRequest.id}`,
@@ -381,13 +450,13 @@ export default defineComponent({
           timer: 3000,
         });
       } finally {
-        this.updatingStatus = false;
-        this.updatingId = null;
+        updatingStatus.value = false;
+        updatingId.value = null;
       }
-    },
+    };
 
-    async deleteMaintenanceRequest(id: number) {
-      this.deleting = true;
+    const deleteMaintenanceRequest = async (id: number) => {
+      deleting.value = true;
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/maintenance-requests/${id}`,
@@ -398,51 +467,91 @@ export default defineComponent({
           },
         });
         if (response.status === 200) {
-          await this.getMaintenanceRequests({
-            page: this.pagination.current_page,
-            per_page: this.pagination.per_page,
-            search: this.searchQuery,
+          await getMaintenanceRequests({
+            page: pagination.value.current_page,
+            per_page: pagination.value.per_page,
+            search: searchQuery.value,
           });
-          this.componentKey += 1;
+          componentKey.value += 1;
         }
         return response;
       } catch (error: any) {
         console.error('deleteMaintenanceRequest error:', error.response?.data || error);
         throw error;
       } finally {
-        this.deleting = false;
+        deleting.value = false;
       }
-    },
+    };
 
-    openForm(maintenanceRequest: MaintenanceRequest | null = null, mode: 'add' | 'edit' = 'add') {
-      this.selectedMaintenanceRequest = maintenanceRequest;
-      this.formMode = mode;
-      this.addEditForm = true;
-    },
+    const openForm = (maintenanceRequest: MaintenanceRequest | null = null, mode: 'add' | 'edit' = 'add') => {
+      selectedMaintenanceRequest.value = maintenanceRequest;
+      formMode.value = mode;
+      addEditForm.value = true;
+    };
 
-    closeForm() {
-      this.selectedMaintenanceRequest = null;
-      this.addEditForm = false;
-      this.formMode = 'add';
-      this.getMaintenanceRequests({
-        page: this.pagination.current_page,
-        per_page: this.pagination.per_page,
-        search: this.searchQuery,
+    const openAssignContractor = (maintenanceRequest: MaintenanceRequest) => {
+      if (!maintenanceRequest?.id) {
+        Swal.fire({
+          title: 'Error!',
+          text: 'Invalid maintenance request selected.',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+        return;
+      }
+      selectedMaintenanceRequest.value = maintenanceRequest;
+      formMode.value = 'assign';
+      addEditForm.value = true;
+    };
+
+    const openTrackProgress = (assignmentId: number) => {
+      if (!Number.isInteger(assignmentId) || assignmentId <= 0) {
+        Swal.fire({
+          title: 'Error!',
+          text: 'Invalid contractor assignment ID.',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+        return;
+      }
+      selectedAssignmentId.value = assignmentId;
+      showTrackProgress.value = true;
+    };
+
+    const closeTrackProgress = () => {
+      showTrackProgress.value = false;
+      selectedAssignmentId.value = null;
+    };
+
+    const closeForm = () => {
+      selectedMaintenanceRequest.value = null;
+      addEditForm.value = false;
+      formMode.value = 'add';
+      getMaintenanceRequests({
+        page: pagination.value.current_page,
+        per_page: pagination.value.per_page,
+        search: searchQuery.value,
       });
-    },
+    };
 
-    openView(maintenanceRequest: MaintenanceRequest) {
-      this.selectedMaintenanceRequest = maintenanceRequest;
-      this.showView = true;
-    },
+    const openView = (maintenanceRequest: MaintenanceRequest) => {
+      selectedMaintenanceRequest.value = maintenanceRequest;
+      showView.value = true;
+    };
 
-    closeView() {
-      this.selectedMaintenanceRequest = null;
-      this.showView = false;
-    },
+    const closeView = () => {
+      selectedMaintenanceRequest.value = null;
+      showView.value = false;
+    };
 
-    confirmDelete(maintenanceRequest: MaintenanceRequest) {
-      this.selectedMaintenanceRequest = maintenanceRequest;
+    const confirmDelete = (maintenanceRequest: MaintenanceRequest) => {
+      selectedMaintenanceRequest.value = maintenanceRequest;
       Swal.fire({
         title: 'Are you sure?',
         text: `You are about to delete the maintenance request for "${maintenanceRequest.property_title || 'N/A'}". This action cannot be undone.`,
@@ -456,15 +565,15 @@ export default defineComponent({
         showConfirmButton: true,
       }).then((result) => {
         if (result.isConfirmed) {
-          this.handleDelete();
+          handleDelete();
         }
       });
-    },
+    };
 
-    async handleDelete() {
-      if (!this.selectedMaintenanceRequest?.id) return;
+    const handleDelete = async () => {
+      if (!selectedMaintenanceRequest.value?.id) return;
       try {
-        const response = await this.deleteMaintenanceRequest(Number(this.selectedMaintenanceRequest.id));
+        const response = await deleteMaintenanceRequest(Number(selectedMaintenanceRequest.value.id));
         if (response.status === 200) {
           Swal.fire({
             title: 'Deleted!',
@@ -475,7 +584,7 @@ export default defineComponent({
             position: 'top-end',
             toast: true,
           });
-          this.selectedMaintenanceRequest = null;
+          selectedMaintenanceRequest.value = null;
         } else {
           throw new Error(response.data?.message || 'Failed to delete maintenance request.');
         }
@@ -499,7 +608,10 @@ export default defineComponent({
               localStorage.removeItem('access_token');
               localStorage.removeItem('jwt');
               localStorage.removeItem('userProfile');
-              this.$router.push('/login');
+              import('vue-router').then(({ useRouter }) => {
+                const router = useRouter();
+                router.push('/login');
+              });
             }
           });
           return;
@@ -514,16 +626,16 @@ export default defineComponent({
           timer: 3000,
         });
       }
-    },
+    };
 
-    async handleSubmit(payload: Payload, mode: 'add' | 'edit') {
-      if (this.submitting) return;
+    const handleSubmit = async (payload: Payload, mode: 'add' | 'edit') => {
+      if (submitting.value) return;
       try {
         let response;
         if (mode === 'add') {
-          response = await this.addMaintenanceRequest(payload);
+          response = await addMaintenanceRequest(payload);
         } else {
-          response = await this.updateMaintenanceRequest(payload);
+          response = await updateMaintenanceRequest(payload);
         }
         if (response.status === 201 || response.status === 200) {
           Swal.fire({
@@ -535,7 +647,7 @@ export default defineComponent({
             position: 'top-end',
             toast: true,
           });
-          this.closeForm();
+          closeForm();
         } else {
           let errorMessage =
             response.data?.message ||
@@ -575,7 +687,10 @@ export default defineComponent({
               localStorage.removeItem('access_token');
               localStorage.removeItem('jwt');
               localStorage.removeItem('userProfile');
-              this.$router.push('/login');
+              import('vue-router').then(({ useRouter }) => {
+                const router = useRouter();
+                router.push('/login');
+              });
             }
           });
           return;
@@ -593,34 +708,95 @@ export default defineComponent({
           timer: 3000,
         });
       }
-    },
+    };
 
-    async handlePageChange(page: number) {
-      await this.getMaintenanceRequests({
+    const handleContractorAssignment = async (assignment: any) => {
+      closeForm();
+      Swal.fire({
+        title: 'Success!',
+        text: 'Contractor assigned successfully.',
+        icon: 'success',
+        position: 'top-end',
+        toast: true,
+        showConfirmButton: false,
+        timer: 3000,
+      });
+      await getMaintenanceRequests({
+        page: pagination.value.current_page,
+        per_page: pagination.value.per_page,
+        search: searchQuery.value,
+      });
+      componentKey.value += 1;
+    };
+
+    const handleProgressUpdated = async () => {
+      closeTrackProgress();
+      await getMaintenanceRequests({
+        page: pagination.value.current_page,
+        per_page: pagination.value.per_page,
+        search: searchQuery.value,
+      });
+      componentKey.value += 1;
+    };
+
+    const handlePageChange = async (page: number) => {
+      await getMaintenanceRequests({
         page,
-        per_page: this.pagination.per_page,
-        search: this.searchQuery,
+        per_page: pagination.value.per_page,
+        search: searchQuery.value,
       });
-      this.componentKey += 1;
-    },
+      componentKey.value += 1;
+    };
 
-    async handleSearch() {
-      await this.getMaintenanceRequests({
-        page: 1,
-        per_page: this.pagination.per_page,
-        search: this.searchQuery,
-      });
-      this.componentKey += 1;
-    },
+    const cancelAdding = () => {
+      closeForm();
+    };
 
-    cancelAdding() {
-      this.closeForm();
-    },
+    // Initial data fetch
+    getMaintenanceRequests({ page: 1, per_page: 10 });
+
+    return {
+      columns,
+      maintenanceRequests,
+      loadingMaintenanceRequests,
+      pagination,
+      addEditForm,
+      showView,
+      showTrackProgress,
+      selectedMaintenanceRequest,
+      selectedAssignmentId,
+      formMode,
+      componentKey,
+      deleting,
+      submitting,
+      updatingStatus,
+      updatingId,
+      searchQuery,
+      statusOptions,
+      debouncedSearch,
+      debouncedHandleSubmit,
+      openForm,
+      openAssignContractor,
+      openTrackProgress,
+      closeTrackProgress,
+      closeForm,
+      openView,
+      closeView,
+      confirmDelete,
+      handleDelete,
+      handleSubmit,
+      handleContractorAssignment,
+      handleProgressUpdated,
+      handlePageChange,
+      cancelAdding,
+      updateStatus,
+    };
   },
 });
 </script>
 
 <style scoped>
+
 .bg-white {
   background-color: #ffffff;
 }
@@ -638,6 +814,12 @@ export default defineComponent({
 }
 .mt-4 {
   margin-top: 1rem;
+}
+.text-xl {
+  font-size: 1.25rem;
+}
+.font-bold {
+  font-weight: 700;
 }
 .flex {
   display: flex;

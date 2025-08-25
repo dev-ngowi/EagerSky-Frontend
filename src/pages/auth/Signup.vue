@@ -16,6 +16,7 @@
             type="text"
             bordered
             class="bordered-input"
+            :error-messages="validationErrors.first_name"
           />
         </div>
         <!-- Last Name -->
@@ -28,6 +29,7 @@
             type="text"
             bordered
             class="bordered-input"
+            :error-messages="validationErrors.last_name"
           />
         </div>
       </div>
@@ -38,11 +40,16 @@
         <VaInput
           id="email"
           v-model="formData.email"
-          :rules="[(v) => !!v || 'Email is required', (v) => /.+@.+\..+/.test(v) || 'Enter a valid email']"
+          :rules="[
+            (v) => !!v || 'Email is required',
+            (v) => /.+@.+\..+/.test(v) || 'Enter a valid email',
+            () => !validationErrors.email || validationErrors.email
+          ]"
           type="email"
           bordered
           class="bordered-input"
           placeholder="eg. eagersky@gmail.com"
+          :error-messages="validationErrors.email"
         />
       </div>
       <!-- Phone -->
@@ -57,11 +64,13 @@
               /^0\d{9}$/.test(v) ||
               /^\+255\d{9}$/.test(v) ||
               'Phone must be 10 digits starting with 0 or 13 digits starting with +255',
+            () => !validationErrors.phone || validationErrors.phone
           ]"
           type="text"
           bordered
           class="bordered-input"
           placeholder="e.g. 0712345678 or +255712345678"
+          :error-messages="validationErrors.phone"
         />
       </div>
       <!-- Password & Repeat -->
@@ -76,6 +85,7 @@
             bordered
             class="bordered-input"
             @clickAppendInner.stop="isPasswordVisible = !isPasswordVisible"
+            :error-messages="validationErrors.password"
           >
             <template #appendInner>
               <VaIcon
@@ -94,11 +104,13 @@
             :rules="[
               (v) => !!v || 'Repeat password is required',
               (v) => v === formData.password || 'Passwords do not match',
+              () => !validationErrors.repeatPassword || validationErrors.repeatPassword
             ]"
             :type="isPasswordVisible ? 'text' : 'password'"
             bordered
             class="bordered-input"
             @clickAppendInner.stop="isPasswordVisible = !isPasswordVisible"
+            :error-messages="validationErrors.repeatPassword"
           >
             <template #appendInner>
               <VaIcon
@@ -120,12 +132,18 @@
             (v) => !!v || 'PIN is required',
             (v) => /^\d{4}$/.test(v) || 'PIN must be exactly 4 digits',
             (v) => !['1234', '0000', '1111', '2222', '1000', '2000', '4321'].includes(v) || 'Choose a stronger PIN',
+            () => !validationErrors.pin || validationErrors.pin
           ]"
           type="password"
           bordered
           class="bordered-input"
           placeholder="4-digit secure PIN"
+          :error-messages="validationErrors.pin"
         />
+      </div>
+      <!-- General Error -->
+      <div v-if="validationErrors.general" class="mb-4 text-red-600 text-sm text-center">
+        {{ validationErrors.general }}
       </div>
       <!-- Submit Button -->
       <div class="flex justify-center mt-6">
@@ -149,7 +167,7 @@ import { useRouter } from 'vue-router';
 import { useForm, useToast } from 'vuestic-ui';
 import { useAuthStore } from '../../stores/auth-store';
 import { mapActions, mapWritableState } from 'pinia';
-import type { SignupFormData, SignupPayload, ApiResponse, UserData } from '../../types/auth';
+import type { SignupFormData, SignupPayload, ApiResponse, UserData, ErrorResponseData } from '../../types/auth';
 
 export default defineComponent({
   name: 'Signup',
@@ -167,7 +185,7 @@ export default defineComponent({
       password: '',
       repeatPassword: '',
       pin: '',
-      role_id: 1,
+      role_id: 3, // Default role_id set to 3 (tenant)
     });
 
     const validationErrors = reactive<Record<string, string>>({});
@@ -194,7 +212,13 @@ export default defineComponent({
   },
   methods: {
     ...mapActions(useAuthStore, ['signup']),
+    
     async submit() {
+      console.log('Starting signup process...');
+      
+      // Clear previous validation errors
+      Object.keys(this.validationErrors).forEach((key) => delete this.validationErrors[key]);
+
       if (!this.validate()) {
         this._signingUp = false;
         this.init({
@@ -215,84 +239,163 @@ export default defineComponent({
           password: this.formData.password,
           password_confirmation: this.formData.repeatPassword,
           pin: this.formData.pin,
-          role_id: this.formData.role_id,
+          role_id: this.formData.role_id, // Ensure role_id is 3 (tenant)
         };
 
-        const response: ApiResponse<UserData> = await this.signup(payload);
+        console.log('Submitting signup payload:', { ...payload, role_id: payload.role_id });
 
-        const responseData = response.data;
+        const response: ApiResponse<UserData> & { redirectTo?: { name?: string; path?: string } } = await this.signup(payload);
+        console.log('Signup response received:', response);
 
-        if ('data' in responseData && response.status === 201) {
-          const userData = responseData.data;
+        // Handle successful registration
+        if ('id' in response.data.data && response.status === 201) {
+          const userData = response.data.data as UserData;
+          console.log('Registration successful. User data:', userData);
+
+          // Store user ID for account activation
+          if (userData.id) {
+            localStorage.setItem('pending_user_id', userData.id.toString());
+            console.log('Stored pending user ID:', userData.id);
+          }
+
+          // Handle case where token is provided (immediate login)
+          if (userData.token && response.redirectTo) {
+            this.init({
+              message: 'Registration successful! Redirecting to your dashboard.',
+              color: 'success',
+            });
+            this.push(response.redirectTo);
+            return;
+          }
+
+          // Show success message for account activation
           this.init({
-            message: 'Signup successful! Please check your email to activate your account.',
+            message: 'Registration successful! Please check your email to activate your account.',
             color: 'success',
           });
 
-          localStorage.setItem('pending_user_id', userData.id);
+          // Navigate to activation page
+          console.log('Navigating to activation page...');
           this.push({
             name: 'activate-account',
             query: {
               email: this.formData.email,
-              user_id: userData.id,
+              user_id: userData.id?.toString() || '',
             },
           });
-
-        } else if ('message' in responseData) {
-          Object.keys(this.validationErrors).forEach((key) => delete this.validationErrors[key]);
-
-          this.validationErrors['general'] = responseData.message || 'Signup failed.';
+        } else {
+          const errorData = response.data.data as ErrorResponseData;
+          console.error('Registration failed with message:', errorData.message);
+          this.validationErrors['general'] = errorData.message || 'Registration failed.';
           this.init({
             message: this.validationErrors['general'],
             color: 'danger',
           });
         }
       } catch (error: any) {
-        console.error('Signup error:', error);
-        Object.keys(this.validationErrors).forEach((key) => delete this.validationErrors[key]);
+        console.error('Signup error caught:', error);
+        
+        const errorResponse = error.response;
+        const errorData = errorResponse?.data?.data as ErrorResponseData | undefined;
 
-        const errorData = error.response?.data;
+        console.log('Error response:', errorResponse);
+        console.log('Error data:', errorData);
 
-        if (error.response?.status === 422 && errorData?.errors) {
+        // Handle validation errors (422)
+        if (errorResponse?.status === 422 && errorData?.errors) {
+          console.log('Validation errors detected:', errorData.errors);
           Object.entries(errorData.errors).forEach(([field, messages]) => {
-            this.validationErrors[field] = (messages as string[])[0];
+            // Map the first error message to the corresponding field
+            this.validationErrors[field] = Array.isArray(messages) ? messages[0] : messages;
           });
+          // Prioritize field-specific errors for the toast message
+          const errorMessage =
+            this.validationErrors.email ||
+            this.validationErrors.pin ||
+            this.validationErrors.phone ||
+            Object.values(this.validationErrors)[0] ||
+            'Validation failed. Please check your inputs.';
           this.init({
-            message: Object.values(this.validationErrors).join('; '),
+            message: errorMessage,
             color: 'danger',
           });
-
-        } else if (
-          error.response?.status === 500 &&
-          errorData?.message === 'User registered, but failed to send OTP email'
-        ) {
-          const userId = errorData?.data?.id;
+        } 
+        // Handle duplicate entry errors (409)
+        else if (errorResponse?.status === 409 || 
+                 (errorData?.message && (
+                   errorData.message.toLowerCase().includes('already exists') ||
+                   errorData.message.toLowerCase().includes('duplicate') ||
+                   errorData.message.toLowerCase().includes('taken')
+                 ))) {
+          console.log('Duplicate entry detected:', errorData?.message);
+          // Map error to specific field (email or pin)
+          if (errorData?.message?.toLowerCase().includes('email')) {
+            this.validationErrors['email'] = 'This email is already taken.';
+          } else if (errorData?.message?.toLowerCase().includes('pin')) {
+            this.validationErrors['pin'] = 'This PIN is already in use.';
+          } else {
+            this.validationErrors['general'] = errorData?.message || 'An account with this email or PIN already exists.';
+          }
+          this.init({
+            message: this.validationErrors['email'] || this.validationErrors['pin'] || this.validationErrors['general'],
+            color: 'danger',
+          });
+        }
+        // Handle registration success with email sending failure (500)
+        else if (errorResponse?.status === 500 && 
+                 errorData?.message === 'User registered, but failed to send OTP email') {
+          console.log('Registration successful but email sending failed');
+          const userId = errorData?.data?.id || errorData?.data?.user_id;
           if (userId) {
-            localStorage.setItem('pending_user_id', userId);
+            localStorage.setItem('pending_user_id', userId.toString());
             this.push({
               name: 'activate-account',
               query: {
                 email: this.formData.email,
-                user_id: userId,
+                user_id: userId.toString(),
               },
             });
           }
-
           this.init({
-            message: 'Signup successful, but failed to send OTP email. Please use the Resend OTP option.',
+            message: 'Registration successful, but failed to send OTP email. Please use the Resend OTP option.',
             color: 'warning',
           });
-
-        } else {
-          let errorMessage = errorData?.message || 'Signup failed. Please try again.';
-          if (!navigator.onLine) {
-            errorMessage = 'No internet connection. Please check your network.';
-          }
-          this.validationErrors['general'] = errorMessage;
-          this.init({ message: errorMessage, color: 'danger' });
+        }
+        // Handle network errors
+        else if (!navigator.onLine) {
+          this.validationErrors['general'] = 'No internet connection. Please check your network and try again.';
+          this.init({
+            message: this.validationErrors['general'],
+            color: 'danger',
+          });
+        }
+        // Handle server errors (500, 503)
+        else if (errorResponse?.status >= 500) {
+          this.validationErrors['general'] = errorData?.message || 'Server error occurred. Please try again later.';
+          this.init({
+            message: `Server Error: ${this.validationErrors['general']}`,
+            color: 'danger',
+          });
+        }
+        // Handle client errors (400, 401, 403, 404)
+        else if (errorResponse?.status >= 400 && errorResponse?.status < 500) {
+          this.validationErrors['general'] = errorData?.message || `Request failed with status ${errorResponse.status}`;
+          this.init({
+            message: `Error: ${this.validationErrors['general']}`,
+            color: 'danger',
+          });
+        }
+        // Handle unexpected errors
+        else {
+          this.validationErrors['general'] = errorData?.message || error.message || 'Registration failed. Please try again.';
+          this.init({
+            message: `Unexpected Error: ${this.validationErrors['general']}`,
+            color: 'danger',
+          });
         }
       } finally {
         this._signingUp = false;
+        console.log('Signup process completed');
       }
     },
   },

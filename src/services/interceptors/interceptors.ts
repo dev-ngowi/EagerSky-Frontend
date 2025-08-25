@@ -1,8 +1,18 @@
 import axios from 'axios'
 import router from '../../router'
 
+// Define the user data interface
+interface UserData {
+  token: string
+  [key: string]: any // Allow for additional properties
+}
+
+interface SessionData extends UserData {
+  expiresAt: number
+}
+
 // Function to set session data with expiration
-const setSessionData = (data) => {
+const setSessionData = (data: UserData): void => {
   const expirationTime = new Date().getTime() + 30 * 60 * 1000 // 30 minutes from now
   sessionStorage.setItem(
     'userData',
@@ -14,11 +24,11 @@ const setSessionData = (data) => {
 }
 
 // Function to get session data and check expiration
-const getSessionData = () => {
+const getSessionData = (): SessionData | null => {
   const userData = sessionStorage.getItem('userData')
   if (!userData) return null
-
-  const parsedData = JSON.parse(userData)
+  
+  const parsedData = JSON.parse(userData) as SessionData
   if (new Date().getTime() > parsedData.expiresAt) {
     sessionStorage.removeItem('userData')
     return null
@@ -36,16 +46,13 @@ axios.interceptors.request.use(
       '/v1/password/reset',
       '/v1/resend-otp',
     ]
-
     const isToBeIgnored = toBeIgnoredUrl.some((url) => config.url?.includes(url))
-
     if (!isToBeIgnored) {
       const sessionData = getSessionData()
       if (sessionData && sessionData.token) {
         config.headers.Authorization = `Bearer ${sessionData.token}`
       }
     }
-
     return config
   },
   function (error) {

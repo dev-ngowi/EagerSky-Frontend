@@ -1,51 +1,31 @@
 <template>
-  <div v-if="isLoading" class="loader" v-bind="$attrs">
-    <EagerLogo :is-white-bg="true" :height="'100'" />
-    <Loader />
+  <div id="app">
+    <!-- Loading Screen -->
+    <div v-if="isLoading" class="loader">
+      <EagerLogo />
+      <Loader />
+    </div>
+    
+    <!-- Main App Content - Just render router-view, let layouts handle themselves -->
+    <div v-else>
+      <router-view />
+    </div>
   </div>
-  <RouterView v-else />
 </template>
 
-<script lang="ts">
-import { defineComponent, onMounted, ref } from 'vue';
-import { RouterView } from 'vue-router';
+<script setup lang="ts">
+import { ref, onMounted } from 'vue';
+import { useToast } from 'vuestic-ui';
 import EagerLogo from './components/EagerLogo.vue';
 import Loader from './components/Loader.vue';
-import { useToast } from 'vuestic-ui';
 
-export default defineComponent({
-  name: 'App',
-  components: {
-    RouterView,
-    EagerLogo,
-    Loader,
-  },
-  inheritAttrs: true,
-  setup() {
-    const isLoading = ref(true);
-    const { init } = useToast();
+const isLoading = ref(true);
+const { init } = useToast();
 
-    onMounted(() => {
-      setTimeout(() => {
-        isLoading.value = false;
-      }, 500); // Keep reduced loading time
-    });
-
-    return {
-      isLoading,
-      errorHandler(err: any) {
-        console.error('Global error:', err);
-        init({
-          message: 'An unexpected error occurred. Please try again.',
-          color: 'danger',
-        });
-      },
-    };
-  },
-  errorCaptured(err) {
-    this.errorHandler(err);
-    return false;
-  },
+onMounted(() => {
+  setTimeout(() => {
+    isLoading.value = false;
+  }, 500);
 });
 </script>
 
@@ -62,5 +42,11 @@ export default defineComponent({
   align-items: center;
   flex-direction: column;
   z-index: 1000;
+}
+
+#app {
+  font-family: 'Poppins', sans-serif;
+  margin: 0;
+  padding: 0;
 }
 </style>

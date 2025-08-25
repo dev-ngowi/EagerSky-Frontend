@@ -277,7 +277,7 @@ export default defineComponent({
         });
         console.log('LocationEdit: Fetched countries:', response.data.data);
         if (response.status === 200) {
-          const fetchedCountries = response.data.data.map((country: any) => ({
+          const fetchedCountries: CountryOption[] = response.data.data.map((country: any) => ({
             value: country.id,
             text: country.name || `Country ${country.id}`,
           }));
@@ -285,13 +285,13 @@ export default defineComponent({
           // Preserve the saved country if it exists and no real ID matches
           const savedCountryText = this.location.country && this.location.country !== 'None' ? this.location.country : null;
           const savedCountryMatch = savedCountryText
-            ? fetchedCountries.find((c) => c.text.toLowerCase() === savedCountryText.toLowerCase())
+            ? fetchedCountries.find((c: CountryOption) => c.text.toLowerCase() === savedCountryText.toLowerCase())
             : null;
 
           if (savedCountryMatch) {
             // Update form with real country ID
             this.form.country_id = savedCountryMatch.value;
-          } else if (savedCountryText && !this.countries.some((c) => c.text.toLowerCase() === savedCountryText.toLowerCase())) {
+          } else if (savedCountryText && !this.countries.some((c: CountryOption) => c.text.toLowerCase() === savedCountryText.toLowerCase())) {
             // Keep the temporary ID if no match is found
             const countryValue = `temp-country-${savedCountryText}`;
             fetchedCountries.push({ value: countryValue, text: savedCountryText });
@@ -350,7 +350,7 @@ export default defineComponent({
         });
         console.log('LocationEdit: Fetched cities:', response.data.data);
         if (response.status === 200) {
-          const fetchedCities = response.data.data.map((city: any) => ({
+          const fetchedCities: CityOption[] = response.data.data.map((city: any) => ({
             value: city.id,
             text: city.name || `City ${city.id}`,
           }));
@@ -358,13 +358,13 @@ export default defineComponent({
           // Preserve the saved city if it exists and no real ID matches
           const savedCityText = this.location.city && this.location.city !== 'None' ? this.location.city : null;
           const savedCityMatch = savedCityText
-            ? fetchedCities.find((c) => c.text.toLowerCase() === savedCityText.toLowerCase())
+            ? fetchedCities.find((c: CityOption) => c.text.toLowerCase() === savedCityText.toLowerCase())
             : null;
 
           if (savedCityMatch) {
             // Update form with real city ID
             this.form.city_id = savedCityMatch.value;
-          } else if (savedCityText && !this.cities.some((c) => c.text.toLowerCase() === savedCityText.toLowerCase())) {
+          } else if (savedCityText && !this.cities.some((c: CityOption) => c.text.toLowerCase() === savedCityText.toLowerCase())) {
             // Keep the temporary ID if no match is found
             const cityValue = `temp-city-${savedCityText}`;
             fetchedCities.push({ value: cityValue, text: savedCityText });
@@ -443,7 +443,7 @@ export default defineComponent({
         console.log('LocationEdit: Fetched streets:', streetsResponse.data.data);
         console.log('LocationEdit: Fetched neighborhoods:', neighborhoodsResponse.data.data);
         if (streetsResponse.status === 200) {
-          const fetchedStreets = streetsResponse.data.data.map((street: any) => ({
+          const fetchedStreets: StreetOption[] = streetsResponse.data.data.map((street: any) => ({
             value: street.id,
             text: street.name || `Street ${street.id}`,
           }));
@@ -451,13 +451,13 @@ export default defineComponent({
           // Preserve the saved street if it exists and no real ID matches
           const savedStreetText = this.location.street && this.location.street !== 'None' ? this.location.street : null;
           const savedStreetMatch = savedStreetText
-            ? fetchedStreets.find((s) => s.text.toLowerCase() === savedStreetText.toLowerCase())
+            ? fetchedStreets.find((s: StreetOption) => s.text.toLowerCase() === savedStreetText.toLowerCase())
             : null;
 
           if (savedStreetMatch) {
             // Update form with real street ID
             this.form.street_id = savedStreetMatch.value;
-          } else if (savedStreetText && !this.streets.some((s) => s.text.toLowerCase() === savedStreetText.toLowerCase())) {
+          } else if (savedStreetText && !this.streets.some((s: StreetOption) => s.text.toLowerCase() === savedStreetText.toLowerCase())) {
             // Keep the temporary ID if no match is found
             const streetValue = `temp-street-${savedStreetText}`;
             fetchedStreets.push({ value: streetValue, text: savedStreetText });
@@ -478,7 +478,7 @@ export default defineComponent({
           });
         }
         if (neighborhoodsResponse.status === 200) {
-          const fetchedNeighborhoods = neighborhoodsResponse.data.data.map((neighborhood: any) => ({
+          const fetchedNeighborhoods: NeighborhoodOption[] = neighborhoodsResponse.data.data.map((neighborhood: any) => ({
             value: neighborhood.id,
             text: neighborhood.name || `Neighborhood ${neighborhood.id}`,
           }));
@@ -487,7 +487,7 @@ export default defineComponent({
           const savedNeighborhoodText =
             this.location.neighborhood && this.location.neighborhood !== 'None' ? this.location.neighborhood : null;
           const savedNeighborhoodMatch = savedNeighborhoodText
-            ? fetchedNeighborhoods.find((n) => n.text.toLowerCase() === savedNeighborhoodText.toLowerCase())
+            ? fetchedNeighborhoods.find((n: NeighborhoodOption) => n.text.toLowerCase() === savedNeighborhoodText.toLowerCase())
             : null;
 
           if (savedNeighborhoodMatch) {
@@ -495,7 +495,7 @@ export default defineComponent({
             this.form.neighborhood_id = savedNeighborhoodMatch.value;
           } else if (
             savedNeighborhoodText &&
-            !this.neighborhoods.some((n) => n.text.toLowerCase() === savedNeighborhoodText.toLowerCase())
+            !this.neighborhoods.some((n: NeighborhoodOption) => n.text.toLowerCase() === savedNeighborhoodText.toLowerCase())
           ) {
             // Keep the temporary ID if no match is found
             const neighborhoodValue = `temp-neighborhood-${savedNeighborhoodText}`;
@@ -578,8 +578,8 @@ export default defineComponent({
         const payload: Payload = {
           id: this.form.id,
           name: this.form.name,
-          city_id: typeof this.form.city_id === 'number' ? this.form.city_id : null,
           country_id: typeof this.form.country_id === 'number' ? this.form.country_id : null,
+          city_id: typeof this.form.city_id === 'number' ? this.form.city_id : null,
           street_id: typeof this.form.street_id === 'number' ? this.form.street_id : null,
           neighborhood_id: typeof this.form.neighborhood_id === 'number' ? this.form.neighborhood_id : null,
           latitude: this.form.latitude || null,

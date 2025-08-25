@@ -1,86 +1,82 @@
 export interface Booking {
-  id: number;
-  property_id: number;
-  property_title: string;
-  client_id: number;
-  client_fullname: string;
-  appointment_type_id: number;
-  appointment_type_name: string;
-  date: string;
-  duration: number;
-  time_slot: string;
-  recurrence: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
+id: number;
+booking_property_type_id: number;
+booking_property_type_name?: string;
+properties?: { id: number; title: string }[];
+rooms?: { room_id: number; room_number: string; property_id?: number }[];
+client_id: number;
+client_fullname: string;
+appointment_type_id: number;
+appointment_type_name: string;
+date: string;
+duration: number;
+time_slot: string;
+recurrence: string;
+status: string;
+notes: string;
+created_at: string;
+updated_at: string;
+deleted_at?: string | null;
 }
-
 export interface FormData {
-  property_id: number | null;
-  client_id: number | null;
-  appointment_type_id: number | null;
-  date: string;
-  duration: number | null;
-  time_slot: string;
-  recurrence: string;
-  status: string;
+id?: number;
+booking_property_type_id: number | null;
+property_ids: number[];
+room_ids: number[];
+client_id: number | null;
+appointment_type_id: number | null;
+date: string;
+duration: number | null;
+time_slot: string;
+recurrence: string;
+status: string;
+notes: string;
 }
-
 export interface Pagination {
-  total: number;
-  per_page: number;
-  current_page: number;
-  last_page: number;
+total: number;
+per_page: number;
+current_page: number;
+last_page: number;
 }
-
 export interface GetBookingsParams {
-  page?: number;
-  per_page?: number;
-  search?: string;
+page?: number;
+per_page?: number;
+search?: string;
+status?: string;
 }
-
-export interface AddBookingPayload extends FormData {}
-
-export interface UpdateBookingPayload extends FormData {
-  id: number;
-}
-
 export interface ErrorResponseData {
-  message: string;
-  errors?: Record<string, string[]>;
+message?: string;
+errors?: Record<string, string[]>;
 }
-
-// Added missing type: Errors
-export interface Errors {
-  property_id: boolean;
-  client_id: boolean;
-  appointment_type_id: boolean;
-  date: boolean;
-  duration: boolean;
-  time_slot: boolean;
-  recurrence: boolean;
-  status: boolean;
-}
-
-// Added missing type: ErrorMessages
-export interface ErrorMessages {
-  property_id: string;
-  client_id: string;
-  appointment_type_id: string;
-  date: string;
-  duration: string;
-  time_slot: string;
-  recurrence: string;
-  status: string;
-}
-
-// Added missing type: Option
 export interface Option {
-  value: number | string;
-  text: string;
+value: number | string;
+text: string;
 }
-
-// Added missing type: ApiResponse
-export type ApiResponse<T> =
-  | { status: 200 | 201 | 204; data: T }
-  | { status: 422 | number; data: ErrorResponseData };
+export type Errors = {
+booking_property_type_id: boolean;
+property_ids: boolean;
+room_ids: boolean;
+selected_property: boolean;
+client_id: boolean;
+appointment_type_id: boolean;
+date: boolean;
+duration: boolean;
+time_slot: boolean;
+recurrence: boolean;
+status: boolean;
+notes: boolean;
+};
+export type ErrorMessages = {
+booking_property_type_id: string;
+property_ids: string;
+room_ids: string;
+selected_property: string;
+client_id: string;
+appointment_type_id: string;
+date: string;
+duration: string;
+time_slot: string;
+recurrence: string;
+status: string;
+notes: string;
+};

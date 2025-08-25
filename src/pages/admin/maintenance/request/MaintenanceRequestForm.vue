@@ -35,21 +35,6 @@
           />
         </div>
 
-        <div>
-          <VaSelect
-            v-model="form.contractor_id"
-            label="Contractor (Optional)"
-            placeholder="Select contractor"
-            :options="contractors"
-            :error="!!errors.contractor_id"
-            :error-messages="errors.contractor_id ? [errors.contractor_id] : []"
-            value-by="value"
-            text-by="text"
-            :disabled="isSubmitting || loadingOptions"
-            :loading="loadingOptions"
-          />
-        </div>
-
         <div class="md:col-span-2">
           <VaTextarea
             v-model="form.description"
@@ -103,7 +88,6 @@ export default defineComponent({
     const form = reactive<FormData>({
       property_id: null,
       user_id: null,
-      contractor_id: null,
       description: '',
       status: '',
     });
@@ -111,7 +95,6 @@ export default defineComponent({
     const errors = reactive<Errors>({
       property_id: '',
       user_id: '',
-      contractor_id: '',
       description: '',
       status: '',
     });
@@ -126,7 +109,6 @@ export default defineComponent({
 
     const properties = ref<{ value: number; text: string }[]>([]);
     const users = ref<{ value: number; text: string }[]>([]);
-    const contractors = ref<{ value: number | null; text: string }[]>([]);
     const loadingOptions = ref<boolean>(false);
 
     const fetchProperties = async () => {
@@ -223,55 +205,6 @@ export default defineComponent({
       }
     };
 
-    const fetchContractors = async () => {
-      loadingOptions.value = true;
-      try {
-        const response = await makeRequest({
-          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/contractors`,
-          method: 'get',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
-            Accept: 'application/json',
-          },
-          params: { per_page: 1000 },
-        });
-        if (response.status === 200) {
-          contractors.value = [
-            { value: null, text: 'None' },
-            ...response.data.data.map((contractor: any) => ({
-              value: contractor.id,
-              text: contractor.name || `Contractor ${contractor.id}`,
-            })),
-          ];
-          if (response.data.data.length === 0) {
-            Swal.fire({
-              title: 'Info',
-              text: 'No contractors found. You can still proceed without selecting a contractor.',
-              icon: 'info',
-              position: 'top-end',
-              toast: true,
-              showConfirmButton: false,
-              timer: 3000,
-            });
-          }
-        } else {
-          throw new Error(response.data?.message || 'Failed to fetch contractors.');
-        }
-      } catch (error: any) {
-        Swal.fire({
-          title: 'Error!',
-          text: error.response?.data?.message || 'Failed to fetch contractors.',
-          icon: 'error',
-          position: 'top-end',
-          toast: true,
-          showConfirmButton: false,
-          timer: 3000,
-        });
-      } finally {
-        loadingOptions.value = false;
-      }
-    };
-
     const submitForm = async () => {
       Object.keys(errors).forEach((key) => (errors[key as keyof Errors] = ''));
 
@@ -309,7 +242,6 @@ export default defineComponent({
     const resetForm = () => {
       form.property_id = null;
       form.user_id = null;
-      form.contractor_id = null;
       form.description = '';
       form.status = '';
       Object.keys(errors).forEach((key) => (errors[key as keyof Errors] = ''));
@@ -317,7 +249,7 @@ export default defineComponent({
     };
 
     onMounted(async () => {
-      await Promise.all([fetchProperties(), fetchUsers(), fetchContractors()]);
+      await Promise.all([fetchProperties(), fetchUsers()]);
     });
 
     return {
@@ -329,7 +261,6 @@ export default defineComponent({
       resetForm,
       properties,
       users,
-      contractors,
       loadingOptions,
     };
   },

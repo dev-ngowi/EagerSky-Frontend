@@ -82,8 +82,8 @@
         <p><strong>Neighborhood:</strong> {{ selectedLocation.neighborhood || 'None' }}</p>
         <p><strong>Latitude:</strong> {{ selectedLocation.latitude || 'None' }}</p>
         <p><strong>Longitude:</strong> {{ selectedLocation.longitude || 'None' }}</p>
-        <p><strong>Created At:</strong> {{ selectedLocation.created_at }}</p>
-        <p><strong>Updated At:</strong> {{ selectedLocation.updated_at }}</p>
+        <p><strong>Created At:</strong> {{ selectedLocation.created_at || 'None' }}</p>
+        <p><strong>Updated At:</strong> {{ selectedLocation.updated_at || 'None' }}</p>
       </div>
       <div class="flex justify-end mt-4">
         <VaButton color="secondary" @click="closeView">Close</VaButton>
@@ -255,7 +255,7 @@ export default defineComponent({
         return;
       }
       this.selectedLocation = location || {
-        id: undefined,
+        id: 0, // Temporary ID for new location, will be ignored in addLocation
         name: '',
         city_id: null,
         country_id: null,
@@ -267,8 +267,8 @@ export default defineComponent({
         city: null,
         street: null,
         neighborhood: null,
-        created_at: 'None',
-        updated_at: 'None',
+        created_at: null,
+        updated_at: null,
       };
       this.formMode = mode;
       this.addEditForm = true;

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<!-- <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { EmptyProject, Project } from '../types'
 import { SelectOption } from 'vuestic-ui'
@@ -134,4 +134,4 @@ const { users: ownerUsers, filters: ownerFilters } = useUsers({ pagination: ref(
 .va-input-wrapper__text {
   gap: 0.2rem;
 }
-</style>
+</style> -->

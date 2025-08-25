@@ -93,7 +93,7 @@
       <div class="p-4">
         <h2 class="text-xl font-bold mb-4">{{ formMode === 'add' ? 'Add New Term Period' : 'Edit Term Period' }}</h2>
         <form @submit.prevent="submitForm">
-          <div class="grid grid-cols-1 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="mb-4">
               <VaSelect
                 v-model="form.property_id"
@@ -136,12 +136,12 @@
             <div class="mb-4">
               <VaInput
                 v-model.number="form.amount"
-                label="Amount"
+                label="Rent per Month with Service Charge"
                 type="number"
-                placeholder="Enter amount"
+                placeholder="Auto-filled from property"
                 :error="!!errors.amount"
                 :error-messages="errors.amount ? [errors.amount] : []"
-                :disabled="isSubmitting"
+                disabled
                 required
               />
             </div>
@@ -166,7 +166,7 @@
                 :disabled="isSubmitting"
               />
             </div>
-            <div class="mb-4">
+            <div class="mb-4 md:col-span-2">
               <VaCheckbox
                 v-model="form.is_active"
                 label="Is Active"
@@ -188,9 +188,9 @@
       <div class="text-lg font-bold mb-4">Term Period Details</div>
       <div v-if="selectedMethod" class="space-y-2">
         <p><strong>Property:</strong> {{ selectedMethod.property_title || 'N/A' }}</p>
-        <p><strong>Landlord:</strong> {{ selectedMethod.landlord_name || 'N/A' }}</p>
+        <p><strong>Landlord:</strong> {{ getLandlordName(selectedMethod.landlord_id) || selectedMethod.landlord_name || 'N/A' }}</p>
         <p><strong>Payment Period:</strong> {{ selectedMethod.period_of_payment || 'N/A' }}</p>
-        <p><strong>Amount:</strong> {{ selectedMethod.amount || 'N/A' }}</p>
+        <p><strong>Rent per Month with Service Charge:</strong> {{ selectedMethod.amount || 'N/A' }}</p>
         <p><strong>Effective From:</strong> {{ parseDate(selectedMethod.effective_from, 'Effective From') }}</p>
         <p><strong>Notes:</strong> {{ selectedMethod.notes || 'N/A' }}</p>
         <p><strong>Active:</strong> {{ selectedMethod.is_active ? 'Yes' : 'No' }}</p>
@@ -203,7 +203,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, reactive } from 'vue';
+import { defineComponent, reactive, watch } from 'vue';
 import Swal from 'sweetalert2';
 import { debounce } from 'lodash';
 import { format, parse, isValid } from 'date-fns';
@@ -214,12 +214,18 @@ interface TermPeriod {
   property_id: number;
   property_title: string;
   landlord_id: number;
-  landlord_name: string;
+  landlord_name: string | null;
   period_of_payment: string;
   amount: number;
   effective_from: string;
   notes: string | null;
   is_active: boolean;
+}
+
+interface Property {
+  value: number;
+  text: string;
+  combined_amount: number;
 }
 
 interface FormData {
@@ -250,18 +256,20 @@ export default defineComponent({
         { key: 'property_title', sortable: true, label: 'Property' },
         { key: 'landlord_name', sortable: true, label: 'Landlord' },
         { key: 'period_of_payment', sortable: true, label: 'Payment Period' },
-        { key: 'amount', sortable: true, label: 'Amount' },
+        { key: 'amount', sortable: true, label: 'Rent per Month with Service Charge' },
         { key: 'effective_from', sortable: true, label: 'Effective From', render: (row: TermPeriod) => this.parseDate(row.effective_from, 'Effective From') },
         { key: 'is_active', sortable: true, label: 'Active', render: (row: TermPeriod) => row.is_active ? 'Yes' : 'No' },
         { key: 'actions', label: 'Actions', sortable: false },
       ],
       methods: [] as TermPeriod[],
-      properties: [] as { value: number; text: string }[],
+      properties: [] as Property[],
       landlords: [] as { value: number; text: string }[],
       paymentPeriodOptions: [
-        { value: 'monthly', text: 'Monthly' },
         { value: 'quarterly', text: 'Quarterly' },
+        { value: 'semi-annually', text: 'Semi-Annually' },
         { value: 'annually', text: 'Annually' },
+        { value: 'semester_1', text: 'Semester 1' },
+        { value: 'semester_2', text: 'Semester 2' },
       ],
       pagination: {
         total: 0,
@@ -340,6 +348,16 @@ export default defineComponent({
       return pages;
     },
   },
+  watch: {
+    'form.property_id'(newPropertyId: number | null) {
+      if (newPropertyId) {
+        const selectedProperty = this.properties.find(p => p.value === newPropertyId);
+        this.form.amount = selectedProperty ? selectedProperty.combined_amount : null;
+      } else {
+        this.form.amount = null;
+      }
+    },
+  },
   async mounted() {
     console.log('TermPeriodList mounted, fetching term periods');
     await this.getMethods();
@@ -366,6 +384,10 @@ export default defineComponent({
         console.error(`${context}: Error parsing date "${dateStr}"`, error);
         return 'N/A';
       }
+    },
+    getLandlordName(landlordId: number): string | null {
+      const landlord = this.landlords.find(l => l.value === landlordId);
+      return landlord ? landlord.text : null;
     },
     async getMethods(params: { page?: number; per_page?: number; search?: string } = {}) {
       this.loadingMethods = true;
@@ -430,18 +452,22 @@ export default defineComponent({
     },
     async fetchOptions() {
       try {
-        const response = await makeRequest({
-          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/properties-term-period/create-options`,
+        // Fetch properties
+        const propertiesResponse = await makeRequest({
+          url: 'https://e1.japango.co.tz/api/v1/properties',
           method: 'get',
           headers: {
             Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
             Accept: 'application/json',
           },
         });
-        console.log('fetchOptions response:', response);
-        if (response.status === 200) {
-          this.properties = response.data.data.properties || [];
-          this.landlords = response.data.data.landlords || [];
+        console.log('fetchOptions properties response:', propertiesResponse);
+        if (propertiesResponse.status === 200) {
+          this.properties = propertiesResponse.data.data?.map((property: any) => ({
+            value: property.id,
+            text: property.title,
+            combined_amount: property.combined_amount,
+          })) || [];
           if (this.properties.length === 0) {
             Swal.fire({
               title: 'Warning',
@@ -453,10 +479,42 @@ export default defineComponent({
               timer: 3000,
             });
           }
+        } else {
+          Swal.fire({
+            title: 'Error!',
+            text: propertiesResponse.data?.message || 'Failed to fetch properties.',
+            icon: 'error',
+            position: 'top-end',
+            toast: true,
+            showConfirmButton: false,
+            timer: 3000,
+          });
+        }
+
+        // Fetch landlords
+        const usersResponse = await makeRequest({
+          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/users`,
+          method: 'get',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+            Accept: 'application/json',
+          },
+          params: {
+            role: 'landlord', // Filter for users with landlord role
+          },
+        });
+        console.log('fetchOptions users response:', usersResponse);
+        if (usersResponse.status === 200) {
+          this.landlords = usersResponse.data.data
+            .filter((user: any) => user.role === 'landlord')
+            .map((user: any) => ({
+              value: user.id,
+              text: `${user.first_name} ${user.last_name} (${user.email})`,
+            }));
           if (this.landlords.length === 0) {
             Swal.fire({
               title: 'Warning',
-              text: 'No landlord available to select.',
+              text: 'No landlords available to select.',
               icon: 'warning',
               position: 'top-end',
               toast: true,
@@ -467,7 +525,7 @@ export default defineComponent({
         } else {
           Swal.fire({
             title: 'Error!',
-            text: response.data?.message || 'Failed to fetch form options.',
+            text: usersResponse.data?.message || 'Failed to fetch landlords.',
             icon: 'error',
             position: 'top-end',
             toast: true,
@@ -529,14 +587,38 @@ export default defineComponent({
       await this.fetchOptions(); // Fetch options before setting form values
       if (mode === 'edit' && method) {
         this.selectedMethod = method;
-        // Ensure properties are loaded before setting property_id
+        // Initialize form with default values
+        this.form.property_id = null;
+        this.form.user_id = null;
+        this.form.period_of_payment = '';
+        this.form.amount = null;
+        this.form.effective_from = '';
+        this.form.notes = '';
+        this.form.is_active = true;
+
+        // Set form values from method
         if (this.properties.length > 0) {
-          this.form.property_id = this.properties.find(p => p.value === method.property_id)?.value ?? null;
+          const selectedProperty = this.properties.find(p => p.value === method.property_id);
+          this.form.property_id = selectedProperty?.value ?? null;
+          this.form.amount = selectedProperty ? selectedProperty.combined_amount : method.amount ?? null;
+          if (!selectedProperty) {
+            console.warn(`Property ID ${method.property_id} not found in properties list`);
+            Swal.fire({
+              title: 'Warning',
+              text: `Property "${method.property_title}" not found in available options.`,
+              icon: 'warning',
+              position: 'top-end',
+              toast: true,
+              showConfirmButton: false,
+              timer: 3000,
+            });
+          }
         } else {
           this.form.property_id = method.property_id ?? null;
+          this.form.amount = method.amount ?? null;
           Swal.fire({
             title: 'Warning',
-            text: 'Property options not loaded. Displaying ID only.',
+            text: 'Property options not loaded. Displaying ID and amount only.',
             icon: 'warning',
             position: 'top-end',
             toast: true,
@@ -544,12 +626,69 @@ export default defineComponent({
             timer: 3000,
           });
         }
-        this.form.user_id = this.landlords.find(l => l.value === method.landlord_id)?.value ?? null;
-        this.form.period_of_payment = method.period_of_payment || '';
-        this.form.amount = method.amount ?? null;
+
+        if (this.landlords.length > 0) {
+          const selectedLandlord = this.landlords.find(l => l.value === method.landlord_id);
+          this.form.user_id = selectedLandlord?.value ?? null;
+          if (!selectedLandlord) {
+            console.warn(`Landlord ID ${method.landlord_id} not found in landlords list`);
+            Swal.fire({
+              title: 'Warning',
+              text: `Landlord "${method.landlord_name || 'ID ' + method.landlord_id}" not found in available options.`,
+              icon: 'warning',
+              position: 'top-end',
+              toast: true,
+              showConfirmButton: false,
+              timer: 3000,
+            });
+          }
+        } else {
+          this.form.user_id = method.landlord_id ?? null;
+          Swal.fire({
+            title: 'Warning',
+            text: 'Landlord options not loaded. Displaying ID only.',
+            icon: 'warning',
+            position: 'top-end',
+            toast: true,
+            showConfirmButton: false,
+            timer: 3000,
+          });
+        }
+
+        // Map 'monthly' to 'semi-annually' for existing records
+        const period = method.period_of_payment || '';
+        if (period === 'monthly') {
+          console.warn(`Mapping deprecated 'monthly' to 'semi-annually' for term period ID ${method.id}`);
+          this.form.period_of_payment = 'semi-annually';
+          Swal.fire({
+            title: 'Warning',
+            text: `Payment period 'monthly' is deprecated and has been mapped to 'Semi-Annually'.`,
+            icon: 'warning',
+            position: 'top-end',
+            toast: true,
+            showConfirmButton: false,
+            timer: 3000,
+          });
+        } else {
+          this.form.period_of_payment = period;
+        }
+
         this.form.effective_from = method.effective_from ? method.effective_from.split(' ')[0] : '';
         this.form.notes = method.notes || '';
         this.form.is_active = method.is_active ?? true;
+
+        console.log('Form populated for edit:', {
+          property_id: this.form.property_id,
+          user_id: this.form.user_id,
+          period_of_payment: this.form.period_of_payment,
+          amount: this.form.amount,
+          effective_from: this.form.effective_from,
+          notes: this.form.notes,
+          is_active: this.form.is_active,
+          method_id: method.id,
+          property_title: method.property_title,
+          landlord_name: method.landlord_name,
+        });
       } else {
         this.selectedMethod = null;
         this.resetForm();
@@ -563,7 +702,7 @@ export default defineComponent({
     },
     resetForm() {
       this.form.property_id = null;
-      this.form.user_id = this.landlords.length === 1 ? this.landlords[0]?.value : null; // Auto-select landlord if only one
+      this.form.user_id = this.landlords.length === 1 ? this.landlords[0]?.value : null;
       this.form.period_of_payment = '';
       this.form.amount = null;
       this.form.effective_from = '';
@@ -574,6 +713,15 @@ export default defineComponent({
     openView(method: TermPeriod) {
       this.selectedMethod = method;
       this.showView = true;
+      if (!method.landlord_name) {
+        console.warn(`Landlord name is null for landlord_id: ${method.landlord_id}`);
+        const landlord = this.landlords.find(l => l.value === method.landlord_id);
+        if (landlord) {
+          console.log(`Found landlord in landlords array: ${landlord.text}`);
+        } else {
+          console.warn(`Landlord ID ${method.landlord_id} not found in landlords array`);
+        }
+      }
     },
     closeView() {
       this.selectedMethod = null;
@@ -658,19 +806,19 @@ export default defineComponent({
     async submitForm() {
       Object.keys(this.errors).forEach((key) => (this.errors[key as keyof Errors] = ''));
 
+      // Validate period_of_payment
+      const validPeriods = ['quarterly', 'semi-annually', 'annually', 'semester_1', 'semester_2'];
+      if (!this.form.period_of_payment) {
+        this.errors.period_of_payment = 'Payment period is required';
+      } else if (!validPeriods.includes(this.form.period_of_payment)) {
+        this.errors.period_of_payment = 'The selected period of payment is invalid.';
+      }
+
       if (!this.form.property_id) {
         this.errors.property_id = 'Property is required';
       }
       if (!this.form.user_id) {
         this.errors.user_id = 'Landlord is required';
-      }
-      if (!this.form.period_of_payment) {
-        this.errors.period_of_payment = 'Payment period is required';
-      }
-      if (this.form.amount === null || this.form.amount === undefined) {
-        this.errors.amount = 'Amount is required';
-      } else if (this.form.amount < 0) {
-        this.errors.amount = 'Amount must be non-negative';
       }
       if (!this.form.effective_from) {
         this.errors.effective_from = 'Effective from date is required';
@@ -680,6 +828,7 @@ export default defineComponent({
       }
 
       if (Object.values(this.errors).some((error) => error)) {
+        console.log('Form validation errors:', this.errors);
         return;
       }
 
@@ -694,6 +843,7 @@ export default defineComponent({
           notes: this.form.notes,
           is_active: this.form.is_active,
         };
+        console.log('Submitting form with payload:', payload);
         await this.debouncedSubmit(payload, this.formMode);
       } catch (error: any) {
         console.error('Submission error:', error.response?.data || error.message);
@@ -874,8 +1024,16 @@ export default defineComponent({
   grid-template-columns: 1fr;
 }
 
+.md\:grid-cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 .gap-4 {
   gap: 1rem;
+}
+
+.md\:col-span-2 {
+  grid-column: span 2 / span 2;
 }
 
 .spinner {
