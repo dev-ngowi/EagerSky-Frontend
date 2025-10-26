@@ -35,7 +35,7 @@
         
         <!-- Content Container -->
         <div class="content-container">
-          <!-- Custom Breadcrumb Section (only when AppLayoutNavigation is not used) -->
+          <!-- Custom Breadcrumb Section -->
           <div v-if="useCustomBreadcrumb" class="breadcrumb-section">
             <div class="breadcrumb-wrapper">
               <VaBreadcrumbs
@@ -71,26 +71,37 @@
                       color="primary"
                       class="breadcrumb-icon"
                     />
-                     <div class="page-header">
-            <div class="page-title-wrapper">
-              <h1 class="page-title">{{ currentPageTitle }}</h1>
-              <p class="page-subtitle" v-if="currentPageSubtitle">{{ currentPageSubtitle }}</p>
-            </div>
-            <div class="page-actions" v-if="hasPageActions">
-              <slot name="page-actions"></slot>
-            </div>
-          </div>
                     <span class="text-primary font-semibold">{{ item.label }}</span>
                   </div>
                 </template>
               </VaBreadcrumbs>
+            </div>
+            <div class="page-header">
+              <div class="page-title-wrapper">
+                <h1 class="page-title">{{ currentPageTitle }}</h1>
+                <p class="page-subtitle" v-if="currentPageSubtitle">{{ currentPageSubtitle }}</p>
+              </div>
+              <div class="page-actions" v-if="hasPageActions">
+                <slot name="page-actions"></slot>
+              </div>
             </div>
           </div>
          
           <!-- Main Content -->
           <main class="main-content">
             <div class="content-wrapper">
-              <router-view />
+              <router-view v-slot="{ Component, route }">
+                <Suspense>
+                  <template #default>
+                    <component :is="Component" :key="route.path" />
+                  </template>
+                  <template #fallback>
+                    <div class="loadingSpiner">
+                      <Loader :loading-text="'Loading page...'" />
+                    </div>
+                  </template>
+                </Suspense>
+              </router-view>
             </div>
           </main>
         </div>
@@ -106,6 +117,7 @@ import { useBreakpoint } from 'vuestic-ui';
 import AppNavbar from '../components/navbar/AppNavbar.vue';
 import AppSidebar from '../components/sidebar/AppSidebar.vue';
 import AppLayoutNavigation from '../components/app-layout-navigation/AppLayoutNavigation.vue';
+import Loader from '../components/Loader.vue';
 import { useGlobalStore } from '../stores/global-store';
 
 const globalStore = useGlobalStore();
@@ -125,7 +137,7 @@ const props = defineProps({
   },
   useCustomBreadcrumb: {
     type: Boolean,
-    default: false // Set to true to use custom breadcrumb instead of AppLayoutNavigation
+    default: false
   }
 });
 
@@ -150,7 +162,6 @@ const breadcrumbItems = computed(() => {
     currentPath += `/${segment}`;
     const isLast = index === pathSegments.length - 1;
     
-    // Format segment name (capitalize and replace dashes with spaces)
     const label = segment
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -220,8 +231,7 @@ watch(isMobile, (newIsMobile) => {
 }
 
 .breadcrumb-wrapper {
-  max-width: 100%;
-  margin: 0;
+  padding: 0 1.5rem;
   width: 100%;
 }
 
@@ -291,8 +301,7 @@ watch(isMobile, (newIsMobile) => {
 }
 
 .page-header {
-  background: var(--va-background-primary);
-  padding: 1.5rem 1.5rem 1rem;
+  padding: 1rem 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -328,42 +337,39 @@ watch(isMobile, (newIsMobile) => {
 
 .main-content {
   flex: 1;
-  padding: 1rem;
+  padding: 1rem 0; /* Reduced from 1.5rem to 1rem to match Dashboard */
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
 }
 
 .content-wrapper {
   width: 100%;
   max-width: 100%;
-  margin: 0;
-  padding: 0;
+  
+  :deep(.bg-white) {
+    background-color: #ffffff;
+  }
+  
+  :deep(.shadow-md) {
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  
+  :deep(.rounded-lg) {
+    border-radius: 0.5rem;
+  }
+  
+  :deep(.p-6) {
+    padding: 1.5rem;
+  }
   
   :deep(.va-card) {
     margin-bottom: 0.75rem;
     width: 100%;
     max-width: 100%;
-  }
-  
-  :deep(.bg-white),
-  :deep(.shadow-md),
-  :deep(.rounded-lg) {
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-  
-  :deep(.row) {
-    margin-left: 0;
+    margin-left: 0; /* Ensure no auto margins */
     margin-right: 0;
-    width: 100%;
-    max-width: 100%;
-    
-    .flex {
-      padding-left: 0.5rem;
-      padding-right: 0.5rem;
-    }
   }
   
   :deep(.va-table-wrapper),
@@ -382,28 +388,13 @@ watch(isMobile, (newIsMobile) => {
       width: 100%;
     }
   }
-  
-  :deep(.maintenance-request-container) {
-    width: 100%;
-    max-width: 100%;
-  }
 }
 
-:deep(.va-layout__area--content) {
-  width: 100%;
-  max-width: 100%;
-}
-
-.main-content {
-  scroll-behavior: smooth;
-}
-
-.content-loading {
+.loadingSpiner {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 200px;
-  width: 100%;
+  min-height: 400px;
 }
 
 .content-enter-active,
@@ -421,14 +412,6 @@ watch(isMobile, (newIsMobile) => {
   box-sizing: border-box;
 }
 
-.app-layout__sidebar-wrapper,
-.content-container,
-.main-content,
-.content-wrapper {
-  max-width: 100% !important;
-  width: 100% !important;
-}
-
 /* Media Queries for Responsive Design */
 @media (max-width: 768px) {
   .navigation-wrapper {
@@ -439,10 +422,16 @@ watch(isMobile, (newIsMobile) => {
     padding: 0.5rem 1rem;
   }
   
+  .breadcrumb-wrapper {
+    padding: 0 1rem;
+    width: 100%;
+  }
+  
   .page-header {
     padding: 1rem;
     flex-direction: column;
     align-items: stretch;
+    width: 100%;
   }
   
   .page-title {
@@ -455,8 +444,11 @@ watch(isMobile, (newIsMobile) => {
     margin-top: 0.5rem;
   }
   
-  .main-content {
-    padding: 0.75rem;
+  
+  
+  .content-wrapper {
+
+    width: 100%;
   }
   
   :deep(.va-table-wrapper),
@@ -467,12 +459,18 @@ watch(isMobile, (newIsMobile) => {
   
   :deep(.va-card) {
     margin-bottom: 0.5rem;
+    width: 100%;
   }
 }
 
 @media (max-width: 480px) {
   .breadcrumb-section {
     padding: 0.5rem 0.75rem;
+  }
+  
+  .breadcrumb-wrapper {
+    padding: 0 0.75rem;
+    width: 100%;
   }
   
   .custom-breadcrumb {
@@ -489,6 +487,7 @@ watch(isMobile, (newIsMobile) => {
   
   .page-header {
     padding: 0.75rem;
+    width: 100%;
   }
   
   .page-title {
@@ -504,21 +503,11 @@ watch(isMobile, (newIsMobile) => {
     gap: 0.5rem;
   }
   
-  .main-content {
-    padding: 0.5rem;
-  }
+ 
   
-  :deep(.row) {
-    .flex {
-      padding-left: 0.25rem;
-      padding-right: 0.25rem;
-    }
-  }
-  
-  :deep(.va-form) {
-    .va-input-wrapper {
-      margin-bottom: 0.25rem;
-    }
+  .content-wrapper {
+    
+    width: 100%;
   }
 }
 </style>

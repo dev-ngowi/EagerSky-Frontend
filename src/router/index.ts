@@ -5,6 +5,7 @@ import {
   RouteMeta as VueRouteMeta,
   RouteLocationRaw,
 } from 'vue-router';
+import { useAuthStore } from '../stores/auth-store';
 import AuthLayout from '../layouts/AuthLayout.vue';
 import AppLayout from '../layouts/AppLayout.vue';
 import { adminRoutes } from './Admin/adminRoutes';
@@ -13,21 +14,29 @@ import { tenantRoutes } from './Tenant/tenantRoutes';
 import { webRoutes } from './Web/WebRoutes';
 import { AuthMiddleware } from '../utils/authMiddleware';
 
-/**
- * Strongly-typed RouteMeta used in our app.
- * includes requiresAuth so we can rely on boolean values (no `{}`).
- */
+// Utility for encoding/decoding paths
+export const encodePath = (path: string): string => {
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  return btoa(cleanPath);
+};
+
+export const decodePath = (encoded: string): string => {
+  try {
+    return '/' + atob(encoded); // Ensure leading slash
+  } catch (e) {
+    console.error('Failed to decode path:', encoded, e);
+    return '';
+  }
+};
+
 export interface RouteMeta extends VueRouteMeta {
   layout?: 'public' | 'private' | 'auth' | 'app';
   title?: string;
   roles?: string[];
   requiresAuth?: boolean;
+  originalPath?: string;
 }
 
-/**
- * Recursive custom route type so children are typed correctly.
- * We omit the builtin 'children' to replace with our recursive one.
- */
 export type CustomRouteRecordRaw = Omit<RouteRecordRaw, 'children' | 'meta'> & {
   meta?: RouteMeta;
   children?: CustomRouteRecordRaw[];
@@ -37,62 +46,66 @@ function asRoute(r: Partial<CustomRouteRecordRaw>): CustomRouteRecordRaw {
   return r as CustomRouteRecordRaw;
 }
 
-/**
- * Helpers to normalise meta fields (ensures booleans & strings, not objects)
- */
 function normalizeMeta(meta?: Partial<RouteMeta>, defaults?: Partial<RouteMeta>): RouteMeta {
   const base: RouteMeta = {
     requiresAuth: false,
+    layout: 'public',
     ...defaults,
     ...(meta ?? {}),
   };
 
-  // Ensure requiresAuth is boolean
   base.requiresAuth = Boolean(base.requiresAuth);
-
-  // Ensure layout is one of allowed strings or fallback to 'public'
-  if (!base.layout) base.layout = (defaults && defaults.layout) ?? 'public';
-
-  // roles should be string[] if present
+  if (!base.layout) base.layout = 'public';
   if (!base.roles) base.roles = undefined;
 
   return base;
 }
 
-/**
- * Build web routes mapping while ensuring types are correct
- */
+// Map web routes (public, unencrypted)
 const mappedWebRoutes: CustomRouteRecordRaw[] = webRoutes.map((route) => {
   const routeMeta = normalizeMeta(route.meta, { requiresAuth: false, layout: 'public' });
-
   const children = route.children?.map((child) => {
-    const childMeta = normalizeMeta(child.meta, { requiresAuth: routeMeta.requiresAuth, layout: routeMeta.layout });
-    return asRoute({
-      ...child,
-      meta: childMeta,
-    });
+    const childMeta = normalizeMeta(child.meta, { requiresAuth: false, layout: routeMeta.layout });
+    return asRoute({ ...child, meta: childMeta });
   });
-
-  return asRoute({
-    ...route,
-    meta: routeMeta,
-    children,
-  });
+  return asRoute({ ...route, meta: routeMeta, children });
 });
 
-/**
- * Main routes array
- */
-const routes: CustomRouteRecordRaw[] = [
-  {
-    path: '/',
-    redirect: { name: 'home' } as RouteLocationRaw,
-  },
+// Map role-based routes with encrypted paths
+const mapRoleRoutes = (routes: CustomRouteRecordRaw[], role: string): CustomRouteRecordRaw[] => {
+  return routes.map((route) => {
+    const encodedPath = encodePath(route.path);
+    const meta = normalizeMeta(
+      { ...route.meta, originalPath: route.path, roles: [role] },
+      { requiresAuth: true, layout: 'app' }
+    );
+    const children = route.children?.map((child) => {
+      const childEncodedPath = encodePath(child.path);
+      const childMeta = normalizeMeta(
+        { ...child.meta, originalPath: child.path, roles: [role] },
+        { requiresAuth: true, layout: 'app' }
+      );
+      return asRoute({
+        ...child,
+        path: childEncodedPath,
+        meta: childMeta,
+      });
+    });
+    return asRoute({
+      ...route,
+      path: encodedPath,
+      meta,
+      children,
+    });
+  });
+};
 
-  // Web routes (typed)
+// === ROUTES DEFINITION ===
+const routes: CustomRouteRecordRaw[] = [
+  // 1. Web Routes (Public) — includes root "/"
   ...mappedWebRoutes,
 
-  // Auth layout & children
+  // 2. Auth Routes
   {
     path: '/auth',
     component: AuthLayout,
@@ -102,133 +115,101 @@ const routes: CustomRouteRecordRaw[] = [
         name: 'login',
         path: 'login',
         component: () => import('../pages/auth/Login.vue'),
-        meta: normalizeMeta({ title: 'Login', layout: 'auth', requiresAuth: false }),
+        meta: normalizeMeta({ title: 'Login', layout: 'auth' }),
       },
       {
         name: 'signup',
         path: 'signup',
         component: () => import('../pages/auth/Signup.vue'),
-        meta: normalizeMeta({ title: 'Sign Up', layout: 'auth', requiresAuth: false }),
+        meta: normalizeMeta({ title: 'Sign Up', layout: 'auth' }),
       },
       {
         name: 'recover-password',
         path: 'recover-password',
         component: () => import('../pages/auth/ForgotPassword.vue'),
-        meta: normalizeMeta({ title: 'Recover Password', layout: 'auth', requiresAuth: false }),
+        meta: normalizeMeta({ title: 'Recover Password', layout: 'auth' }),
       },
       {
         name: 'recover-password-otp',
         path: 'recover-password-otp',
         component: () => import('../pages/auth/ResetPassword.vue'),
-        props: (route) => ({
-          email: route.query.email,
-          user_id: route.query.user_id,
-        }),
-        meta: normalizeMeta({ title: 'Reset Password', layout: 'auth', requiresAuth: false }),
+        props: (route) => ({ email: route.query.email, user_id: route.query.user_id }),
+        meta: normalizeMeta({ title: 'Reset Password', layout: 'auth' }),
       },
       {
         name: 'activate-account',
         path: 'activate-account',
         component: () => import('../pages/auth/ActivateAccount.vue'),
-        props: (route) => ({
-          email: route.query.email,
-          user_id: route.query.user_id,
-        }),
-        meta: normalizeMeta({ title: 'Activate Account', layout: 'auth', requiresAuth: false }),
+        props: (route) => ({ email: route.query.email, user_id: route.query.user_id }),
+        meta: normalizeMeta({ title: 'Activate Account', layout: 'auth' }),
       },
       {
         name: 'resend-otp',
         path: 'resend-otp',
         component: () => import('../pages/auth/ActivateAccount.vue'),
-        props: (route) => ({
-          email: route.query.email,
-          user_id: route.query.user_id,
-        }),
-        meta: normalizeMeta({ title: 'Resend OTP', layout: 'auth', requiresAuth: false }),
+        props: (route) => ({ email: route.query.email, user_id: route.query.user_id }),
+        meta: normalizeMeta({ title: 'Resend OTP', layout: 'auth' }),
       },
       {
         name: 'recover-password-email',
         path: 'recover-password-email',
         component: () => import('../pages/auth/CheckTheEmail.vue'),
-        meta: normalizeMeta({ title: 'Check Your Email', layout: 'auth', requiresAuth: false }),
+        meta: normalizeMeta({ title: 'Check Your Email', layout: 'auth' }),
       },
     ],
   },
 
-  // Direct auth routes (redirects to children above)
-  {
-    name: 'login-direct',
-    path: '/login',
-    redirect: { name: 'login' } as RouteLocationRaw,
-    meta: normalizeMeta({ requiresAuth: false }),
-  },
-  {
-    name: 'signup-direct',
-    path: '/signup',
-    redirect: { name: 'signup' } as RouteLocationRaw,
-    meta: normalizeMeta({ requiresAuth: false }),
-  },
+  // Direct auth redirects
+  { name: 'login-direct', path: '/login', redirect: { name: 'login' }, meta: normalizeMeta({ requiresAuth: false }) },
+  { name: 'signup-direct', path: '/signup', redirect: { name: 'signup' }, meta: normalizeMeta({ requiresAuth: false }) },
 
-  // App area with sub-routes (admin/landlord/tenant)
+  // 3. Role-Based Encrypted Routes
   {
-    path: '/app',
+    path: '/app/:encodedPath(.*)*',
     name: 'app',
     component: AppLayout,
-    meta: normalizeMeta({ requiresAuth: true, layout: 'app' }),
+    meta: normalizeMeta({ requiresAuth: true, layout: 'app', roles: ['admin'] }),
+    children: mapRoleRoutes(adminRoutes, 'admin'),
     redirect: () => {
       const userRole = AuthMiddleware.getUserRole();
-      console.log('App redirect - User role:', userRole);
-      if (userRole === 'tenant') {
-        return { name: 'my-account' } as RouteLocationRaw;
-      }
-      return AuthMiddleware.getDashboardRoute();
+      return userRole === 'admin'
+        ? { path: `/app/${encodePath('dashboard')}` }
+        : { name: 'not-found' };
     },
-    children: [
-      // spread lists and ensure meta normalization for all children
-      ...adminRoutes.map((r) =>
-        asRoute({
-          ...r,
-          meta: normalizeMeta(r.meta, { requiresAuth: true, layout: 'app' }),
-        })
-      ),
-      ...landlordRoutes.map((r) =>
-        asRoute({
-          ...r,
-          meta: normalizeMeta(r.meta, { requiresAuth: true, layout: 'app' }),
-        })
-      ),
-      ...tenantRoutes.map((r) =>
-        asRoute({
-          ...r,
-          meta: normalizeMeta(r.meta, { requiresAuth: true, layout: 'app' }),
-        })
-      ),
-      {
-        name: 'dashboard',
-        path: 'dashboard',
-        redirect: () => {
-          const userRole = AuthMiddleware.getUserRole();
-          console.log('Dashboard redirect - User role:', userRole);
-          if (userRole === 'tenant') {
-            return { name: 'my-account' } as RouteLocationRaw;
-          }
-          return AuthMiddleware.getDashboardRoute();
-        },
-        meta: normalizeMeta({
-          requiresAuth: true,
-          roles: ['admin', 'landlord', 'tenant'],
-          layout: 'app',
-        }),
-      },
-    ],
+  },
+  {
+    path: '/tenant/:encodedPath(.*)*',
+    name: 'tenant',
+    component: AppLayout,
+    meta: normalizeMeta({ requiresAuth: true, layout: 'app', roles: ['tenant'] }),
+    children: mapRoleRoutes(tenantRoutes, 'tenant'),
+    redirect: () => {
+      const userRole = AuthMiddleware.getUserRole();
+      return userRole === 'tenant'
+        ? { path: `/tenant/${encodePath('tenant-home')}` }
+        : { name: 'not-found' };
+    },
+  },
+  {
+    path: '/landlord/:encodedPath(.*)*',
+    name: 'landlord',
+    component: AppLayout,
+    meta: normalizeMeta({ requiresAuth: true, layout: 'app', roles: ['landlord'] }),
+    children: mapRoleRoutes(landlordRoutes, 'landlord'),
+    redirect: () => {
+      const userRole = AuthMiddleware.getUserRole();
+      return userRole === 'landlord'
+        ? { path: `/landlord/${encodePath('dashboard')}` }
+        : { name: 'not-found' };
+    },
   },
 
-  // 404
+  // 4. 404 Page
   {
     name: 'not-found',
     path: '/404',
     component: () => import('../layouts/PublicLayout.vue'),
-    meta: normalizeMeta({ title: 'Page Not Found', layout: 'public', requiresAuth: false }),
+    meta: normalizeMeta({ title: 'Page Not Found', layout: 'public' }),
     children: [
       {
         path: '',
@@ -238,103 +219,106 @@ const routes: CustomRouteRecordRaw[] = [
     ],
   },
 
-  // catch all
+  // 5. Catch-all (MUST BE LAST)
   {
-    name: 'catch-all',
     path: '/:pathMatch(.*)*',
-    redirect: { name: 'not-found' } as RouteLocationRaw,
-    meta: normalizeMeta({ requiresAuth: false }),
+    redirect: '/404',
   },
 ];
 
+// === CREATE ROUTER ===
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  // cast to RouteRecordRaw[] to satisfy createRouter signature while preserving our strong typing
   routes: routes as unknown as RouteRecordRaw[],
 });
 
-/**
- * Navigation guard with strongly-typed role handling.
- * routeRoles is always treated as string[] (or empty array).
- */
+// === NAVIGATION GUARD ===
 router.beforeEach((to, from, next) => {
-  console.log('Navigation Guard:', {
-    to: { name: to.name, path: to.path, meta: to.meta },
-    from: { name: from.name, path: from.path },
-  });
-
   const toMeta = (to.meta ?? {}) as RouteMeta;
+  const authStore = useAuthStore();
 
+  // Set page title
   if (toMeta.title) {
     document.title = `${toMeta.title} - EagerSky`;
   }
 
-  if (!toMeta.requiresAuth) {
-    return next();
-  }
-
+  // === 1. Session Expired? Clear and redirect ===
   if (!AuthMiddleware.isSessionValid()) {
-    console.log('User not authenticated, redirecting to login');
-    return next({
-      name: 'login',
-      query: { redirect: to.fullPath },
-    });
-  }
-
-  if (to.path.startsWith('/my-account')) {
+    authStore.clearAuthData();
+    if (toMeta.requiresAuth || to.path.startsWith('/app') || to.path.startsWith('/tenant') || to.path.startsWith('/landlord')) {
+      return next({ path: '/', query: { sessionExpired: 'true' } });
+    }
     return next();
   }
 
-  const userRole = AuthMiddleware.getUserRole();
-  // ensure routeRoles is a string[] (never an object)
-  const routeRoles = (toMeta.roles ?? []) as string[];
-
-  console.log('Role check:', { userRole, routeRoles });
-
-  if (userRole === 'tenant' && to.path.startsWith('/app')) {
-    console.log('Tenant redirecting to my-account');
-    return next({ name: 'my-account' });
+  // === 2. Authenticated + on root → redirect to dashboard ===
+  if (to.path === '/' && AuthMiddleware.isSessionValid()) {
+    const userRole = AuthMiddleware.getUserRole();
+    if (userRole === 'admin') return next(`/app/${encodePath('dashboard')}`);
+    if (userRole === 'tenant') return next(`/tenant/${encodePath('tenant-home')}`);
+    if (userRole === 'landlord') return next(`/landlord/${encodePath('dashboard')}`);
+    return next(); // fallback: stay on web home
   }
 
-  if (routeRoles.length > 0 && !AuthMiddleware.hasRole(routeRoles)) {
-    console.warn(`Access denied. User role: ${userRole}, Required roles: ${routeRoles.join(', ')}`);
-    return next({ name: 'my-account' });
+  // === 3. Protected Route (requiresAuth) ===
+  if (toMeta.requiresAuth) {
+    const userRole = AuthMiddleware.getUserRole();
+    if (!userRole) {
+      authStore.clearAuthData();
+      return next('/');
+    }
+
+    const routeRoles = (toMeta.roles ?? []) as string[];
+    if (routeRoles.length > 0 && !routeRoles.includes(userRole)) {
+      console.warn(`Access denied: ${userRole} not in [${routeRoles.join(', ')}]`);
+      return next('/');
+    }
+
+    // Validate encoded path
+    const encodedPath = Array.isArray(to.params.encodedPath)
+      ? to.params.encodedPath.join('/')
+      : to.params.encodedPath;
+
+    if (encodedPath && (to.path.startsWith('/app') || to.path.startsWith('/tenant') || to.path.startsWith('/landlord'))) {
+      const decodedPath = decodePath(encodedPath);
+      const roleRoutes = userRole === 'admin' ? adminRoutes :
+                         userRole === 'tenant' ? tenantRoutes :
+                         landlordRoutes;
+
+      const isValid = roleRoutes.some(r =>
+        r.path === decodedPath || r.children?.some(c => c.path === decodedPath)
+      );
+
+      if (!isValid) {
+        console.warn(`Invalid path for ${userRole}: ${decodedPath}`);
+        return next({ name: 'not-found' });
+      }
+    }
+
+    return next();
   }
 
+  // === 4. Public/Auth Pages: Block if authenticated ===
+  if (!toMeta.requiresAuth && AuthMiddleware.isSessionValid()) {
+    const blockedRoutes = [
+      'login', 'signup', 'login-direct', 'signup-direct',
+      'recover-password', 'recover-password-otp',
+      'activate-account', 'resend-otp', 'recover-password-email'
+    ];
+
+    if (typeof to.name === 'string' && blockedRoutes.includes(to.name)) {
+      const userRole = AuthMiddleware.getUserRole();
+      const redirectMap: Record<string, string> = {
+        admin: `/app/${encodePath('dashboard')}`,
+        tenant: `/tenant/${encodePath('tenant-home')}`,
+        landlord: `/landlord/${encodePath('dashboard')}`,
+      };
+      return next(redirectMap[userRole] || '/');
+    }
+  }
+
+  // === 5. Allow ===
   return next();
 });
 
-/**
- * Utility helpers (type-safely cast meta.roles when used)
- */
-export function hasRouteAccess(routeName: string | null | undefined, userRole?: string | null): boolean {
-  if (!routeName) {
-    console.log('hasRouteAccess: routeName is null or undefined');
-    return true;
-  }
-
-  const role = userRole ?? AuthMiddleware.getUserRole() ?? 'guest';
-  const route = router.getRoutes().find((r) => r.name === routeName);
-
-  if (!route || !route.meta?.roles) {
-    return true;
-  }
-
-  const routeRoles = (route.meta.roles ?? []) as string[];
-  return AuthMiddleware.hasRole(routeRoles);
-}
-
-export function getRoutesForRole(userRole?: string | null) {
-  const role = userRole ?? AuthMiddleware.getUserRole() ?? 'guest';
-  return router.getRoutes().filter((route) => {
-    if (!route.meta?.roles) return true;
-    if (typeof route.name === 'string') {
-      return hasRouteAccess(route.name, role);
-    }
-    console.log('getRoutesForRole: route.name is not a string', route.name);
-    return true;
-  });
-}
-
-export { getUserRole, getDashboardRoute } from '../utils/authMiddleware';
 export default router;

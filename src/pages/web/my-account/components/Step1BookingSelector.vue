@@ -58,7 +58,7 @@ export default {
   },
   data() {
     return {
-      API_BASE_URL: import.meta.env.VITE_APP_API_BASE_URL || 'https://e1.japango.co.tz/api/v1',
+      API_BASE_URL: import.meta.env.VITE_APP_API_BASE_URL || 'https://app.eagersky.co.tz/api/v1',
       authStore: useAuthStore(),
       bookingId: this.initialBookingId,
       confirmedBookings: [],

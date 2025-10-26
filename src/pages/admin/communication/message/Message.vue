@@ -1,151 +1,170 @@
 <template>
-  <div class="bg-white shadow-md rounded-lg p-6">
-    <!-- Search and Buttons -->
-    <div class="flex justify-between items-center mb-4">
-      <div class="flex items-center space-x-4">
-        <VaInput
-          v-model="filters.search"
-          placeholder="Search by name, email, or subject"
-          class="w-64"
-          @input="debouncedFetchMessages(1)"
-        />
-      </div>
-      <div class="flex space-x-2">
-        <VaButton
-          v-if="addEditForm"
-          icon="close"
-          color="success"
-          size="small"
-          class="px-4"
-          @click="cancelForm"
-        >
-          Done
-        </VaButton>
-        <VaButton
-          v-if="!addEditForm"
-          icon="add"
-          color="#00A3E0"
-          size="small"
-          class="px-4"
-          @click="openForm(null, 'add')"
-        >
-          Add Message
-        </VaButton>
-      </div>
+  <div class="bg-white shadow-md rounded-lg p-4 sm:p-6">
+    <div v-if="loadingMessages" class="loadingSpinner">
+      <Loader v-if="hasLoaderComponent" :loading-text="'Loading messages...'" />
+      <div v-else>Loading messages...</div>
     </div>
-
-    <!-- Table or Form -->
-    <template v-if="!addEditForm">
-      <VaDataTable
-        :key="componentKey"
-        :items="messages"
-        striped
-        :columns="columns"
-        :loading="loadingMessages"
-        :per-page="pagination.per_page"
-        :current-page="pagination.current_page"
-        @update:currentPage="handlePageChange"
-      >
-        <template #cell(sn)="{ rowIndex }">
-          {{ (pagination.current_page - 1) * pagination.per_page + rowIndex + 1 }}
-        </template>
-        <template #cell(is_read)="{ rowData }">
-          {{ rowData.is_read ? 'Yes' : 'No' }}
-        </template>
-        <template #cell(created_at)="{ rowData }">
-          {{ formatDateTime(rowData.created_at) }}
-        </template>
-        <template #cell(updated_at)="{ rowData }">
-          {{ formatDateTime(rowData.updated_at) }}
-        </template>
-        <template #cell(actions)="{ rowData }">
-          <VaButton
-            size="small"
-            color="primary"
-            icon="visibility"
-            @click="openView(rowData)"
+    <div v-else-if="errorMessage" class="text-center py-4 text-red-600">
+      {{ errorMessage }}
+      <button class="ml-4 text-blue-600 underline" @click="retryFetch">
+        Retry
+      </button>
+    </div>
+    <div v-else>
+      <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 space-y-4 sm:space-y-0">
+        <div class="flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0 w-full sm:w-auto">
+          <VaInput
+            v-model="filters.search"
+            placeholder="Search by name, email, or subject"
+            class="w-full sm:w-64"
+            :disabled="loadingMessages"
+            @input="debouncedFetchMessages(1)"
           />
-          <VaButton
-            size="small"
-            color="warning"
-            icon="edit"
-            class="ml-2"
-            @click="openForm(rowData, 'edit')"
-          />
-          <VaButton
-            size="small"
-            color="danger"
-            icon="delete"
-            class="ml-2"
-            @click="confirmDelete(rowData.id)"
-          />
-        </template>
-      </VaDataTable>
-      <div class="flex justify-between items-center mt-4">
-        <div>
-          Showing {{ (pagination.current_page - 1) * pagination.per_page + 1 }} to
-          {{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} of
-          {{ pagination.total }} messages
-        </div>
-        <div class="flex space-x-2">
-          <VaButton
-            size="small"
-            :disabled="pagination.current_page === 1"
-            @click="handlePageChange(pagination.current_page - 1)"
-          >
-            Previous
+          <VaButton v-if="filters.search" color="warning" size="small" @click="clearSearch" class="sm:w-auto">
+            Clear Search
           </VaButton>
+          <VaSelect
+            v-model="pagination.per_page"
+            :options="perPageOptions"
+            label="Items per page"
+            value-by="value"
+            text-by="text"
+            class="w-full sm:w-32"
+            @update:modelValue="debouncedFetchMessages(1)"
+          />
+        </div>
+        <div class="flex space-x-2 w-full sm:w-auto justify-end">
           <VaButton
+            v-if="!addEditForm"
+            icon="add"
+            color="#00A3E0"
             size="small"
-            :disabled="pagination.current_page === pagination.last_page"
-            @click="handlePageChange(pagination.current_page + 1)"
+            class="px-4"
+            @click="openForm(null, 'add')"
           >
-            Next
+            Add Message
+          </VaButton>
+           <VaButton
+            v-if="addEditForm"
+            icon="close"
+            color="success"
+            size="small"
+            class="px-4"
+            @click="cancelForm"
+          >
+            Done
           </VaButton>
         </div>
       </div>
-      <div v-if="messages.length === 0 && !loadingMessages && errorMessage" class="text-center py-4 text-red-500 text-sm">
-        {{ errorMessage }}
-      </div>
-      <div v-else-if="messages.length === 0 && !loadingMessages" class="text-center py-4 text-gray-500 text-sm">
-        No messages found. Try adding a new message or adjusting the search.
-      </div>
-    </template>
 
-    <template v-else>
+      <div v-if="!addEditForm">
+        <div v-if="!messages || messages.length === 0" class="text-center py-4">
+          No messages found. Try adding a new message or adjusting the search.
+        </div>
+        <VaDataTable
+          v-else
+          :items="messages"
+          striped
+          :columns="columns"
+          :loading="loadingMessages"
+          :per-page="pagination.per_page"
+          :current-page="pagination.current_page"
+          @update:currentPage="handlePageChange"
+        >
+          <template #cell(sn)="{ rowIndex }">
+            {{ (pagination.current_page - 1) * pagination.per_page + rowIndex + 1 }}
+          </template>
+          <template #cell(is_read)="{ rowData }">
+            {{ (rowData as Message).is_read ? 'Yes' : 'No' }}
+          </template>
+          <template #cell(created_at)="{ rowData }">
+            {{ formatDateTime((rowData as Message).created_at) }}
+          </template>
+          <template #cell(updated_at)="{ rowData }">
+            {{ formatDateTime((rowData as Message).updated_at) }}
+          </template>
+          <template #cell(actions)="{ rowData }">
+            <VaButton
+              size="small"
+              color="primary"
+              icon="visibility"
+              @click="openView(rowData as Message)"
+            />
+            <VaButton
+              size="small"
+              color="danger"
+              icon="delete"
+              class="ml-2"
+              @click="confirmDelete((rowData as Message).id)"
+            />
+          </template>
+        </VaDataTable>
+        <div v-if="messages && messages.length > 0" class="flex flex-col sm:flex-row sm:justify-between sm:items-center mt-4 space-y-2 sm:space-y-0">
+          <div class="text-sm">
+            Showing {{ paginationComputed.from }} to {{ paginationComputed.to }} of {{ paginationComputed.total }} messages
+          </div>
+          <div class="flex space-x-2 overflow-x-auto">
+            <VaButton
+              size="small"
+              :disabled="pagination.current_page === 1"
+              @click="handlePageChange(pagination.current_page - 1)"
+            >
+              Previous
+            </VaButton>
+            <VaButton
+              v-for="page in paginationPages"
+              :key="page"
+              size="small"
+              :color="pagination.current_page === page ? '#00A3E0' : 'secondary'"
+              @click="handlePageChange(page)"
+            >
+              {{ page }}
+            </VaButton>
+            <VaButton
+              size="small"
+              :disabled="pagination.current_page === paginationComputed.last_page"
+              @click="handlePageChange(pagination.current_page + 1)"
+            >
+              Next
+            </VaButton>
+          </div>
+        </div>
+      </div>
       <MessageForm
+        v-else
         :message="selectedMessage"
         :mode="formMode"
         @close="cancelForm"
         @submit="debouncedHandleSubmit"
       />
-    </template>
-
-    <!-- View Message Modal -->
-    <VaModal v-model="showView" size="medium" layout="centered" close-button hide-default-actions class="p-4">
-      <div class="text-lg font-bold mb-4">Message Details</div>
-      <div v-if="selectedMessage" class="space-y-2">
-        <p><strong>Name:</strong> {{ selectedMessage.name || 'N/A' }}</p>
-        <p><strong>Email:</strong> {{ selectedMessage.email || 'N/A' }}</p>
-        <p><strong>Subject:</strong> {{ selectedMessage.subject || 'N/A' }}</p>
-        <p><strong>Message:</strong> {{ selectedMessage.message || 'N/A' }}</p>
-        <p><strong>Read Status:</strong> {{ selectedMessage.is_read ? 'Read' : 'Unread' }}</p>
-        <p><strong>Created At:</strong> {{ formatDateTime(selectedMessage.created_at) }}</p>
-        <p><strong>Updated At:</strong> {{ formatDateTime(selectedMessage.updated_at) }}</p>
-      </div>
-      <div class="flex justify-end mt-4">
-        <VaButton color="secondary" @click="closeView">Close</VaButton>
-      </div>
-    </VaModal>
+      <VaModal v-model="showView" size="medium" layout="centered" close-button hide-default-actions class="p-4">
+        <div class="text-lg font-bold mb-4">Message Details</div>
+        <div v-if="selectedMessage" class="space-y-2">
+          <p><strong>Name:</strong> {{ selectedMessage.name || 'N/A' }}</p>
+          <p><strong>Email:</strong> {{ selectedMessage.email || 'N/A' }}</p>
+          <p><strong>Subject:</strong> {{ selectedMessage.subject || 'N/A' }}</p>
+          <p><strong>Message:</strong> {{ selectedMessage.message || 'N/A' }}</p>
+          <p><strong>Read Status:</strong> {{ selectedMessage.is_read ? 'Read' : 'Unread' }}</p>
+          <p><strong>Created At:</strong> {{ formatDateTime(selectedMessage.created_at) }}</p>
+          <p><strong>Updated At:</strong> {{ formatDateTime(selectedMessage.updated_at) }}</p>
+        </div>
+        <div class="flex justify-end mt-4">
+          <VaButton color="secondary" @click="closeView">Close</VaButton>
+        </div>
+      </VaModal>
+    </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, reactive, onMounted } from 'vue';
+import { defineComponent, ref, reactive, computed, onMounted } from 'vue';
 import { debounce } from 'lodash';
 import Swal from 'sweetalert2';
 import makeRequest from '../../../../services/makeRequest';
 import MessageForm from './MessageForm.vue';
+import Loader from '../../../../components/Loader.vue';
+
+// --- Type Definitions for TypeScript Safety ---
 
 interface Message {
   id: number;
@@ -158,32 +177,86 @@ interface Message {
   updated_at: string;
 }
 
+interface PaginationState {
+  total: number;
+  per_page: number;
+  current_page: number;
+  last_page: number;
+  from: number;
+  to: number;
+}
+
+interface PerPageOption {
+  value: number;
+  text: string;
+}
+
+// Type for VaDataTable columns
+interface DataColumn {
+  key: keyof (Message & { sn: unknown; actions: unknown }); // Include virtual keys 'sn' and 'actions'
+  sortable?: boolean;
+  label: string;
+}
+
+// Type for the API response structure to ensure type safety on data parsing
+interface ApiResponse<T> {
+    data: {
+        data: T | T[];
+        total?: number;
+        per_page?: number;
+        current_page?: number;
+        last_page?: number;
+    };
+    status: number;
+    message?: string;
+    errors?: Record<string, string[]>;
+}
+
+// The utility type to ensure the `makeRequest` returns a consistent structure.
+type MakeRequestReturnType<T> = Promise<{ status: number; data: ApiResponse<T> | Record<string, any> }>;
+
+
 export default defineComponent({
   name: 'ClientMessages',
-  components: { MessageForm },
+  components: { MessageForm, Loader },
   setup() {
-    const API_BASE_URL = import.meta.env.VITE_APP_API_BASE_URL || 'https://e1.japango.co.tz';
+    // Casting makeRequest to the assumed type to satisfy TS
+    const typedMakeRequest = makeRequest as <T>(config: any) => MakeRequestReturnType<T>;
+
+    const API_BASE_URL: string = import.meta.env.VITE_APP_API_BASE_URL || 'https://app.eagersky.co.tz';
 
     // State
     const messages = ref<Message[]>([]);
     const loadingMessages = ref<boolean>(false);
     const isLoading = ref<boolean>(false);
     const errorMessage = ref<string>('');
-    const filters = reactive({ search: '' });
-    const pagination = reactive({
+    const filters = reactive<{ search: string }>({ search: '' });
+    const pagination = reactive<PaginationState>({
       total: 0,
       per_page: 10,
       current_page: 1,
       last_page: 1,
+      from: 0,
+      to: 0,
     });
     const selectedMessage = ref<Message | null>(null);
+    // formMode only needs to support 'add' now, but keeping 'add' | 'edit' for compatibility
     const formMode = ref<'add' | 'edit'>('add');
     const addEditForm = ref<boolean>(false);
     const showView = ref<boolean>(false);
-    const componentKey = ref<number>(0);
+    const hasLoaderComponent = ref<boolean>(true);
+    const perPageOptions = ref<PerPageOption[]>([
+      { value: 10, text: '10' },
+      { value: 25, text: '25' },
+      { value: 50, text: '50' },
+      { value: 100, text: '100' },
+      { value: -1, text: 'All' },
+    ]);
+    const maxRetries = 3;
+    const retryDelay = 2000;
 
     // Computed
-    const columns = [
+    const columns: DataColumn[] = [
       { key: 'sn', sortable: false, label: 'SN' },
       { key: 'id', sortable: true, label: 'ID' },
       { key: 'name', sortable: true, label: 'Name' },
@@ -195,8 +268,48 @@ export default defineComponent({
       { key: 'actions', sortable: false, label: 'Actions' },
     ];
 
+    const paginationComputed = computed<PaginationState>(() => {
+        const total = pagination.total;
+        const perPage = Math.max(pagination.per_page, 1); // Avoid division by zero/negative
+        const currentPage = pagination.current_page;
+        const lastPage = perPage === -1 ? 1 : Math.ceil(total / perPage) || 1;
+        const from = total > 0 ? (currentPage - 1) * perPage + 1 : 0;
+        const to = perPage === -1 ? total : Math.min(currentPage * perPage, total);
+
+        return {
+            ...pagination, // Spread the original properties
+            last_page: lastPage,
+            from: from,
+            to: to,
+        };
+    });
+
+
+    const paginationPages = computed(() => {
+      if (pagination.per_page === -1) return [];
+      const pages: number[] = [];
+      const lastPage = paginationComputed.value.last_page;
+      const current = pagination.current_page;
+      const range = 2;
+      let start = Math.max(1, current - range);
+      let end = Math.min(lastPage, current + range);
+
+      if (end - start < 2 * range) {
+        if (start === 1) {
+          end = Math.min(lastPage, start + 2 * range);
+        } else if (end === lastPage) {
+          start = Math.max(1, end - 2 * range);
+        }
+      }
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      return pages;
+    });
+
     // Helper Functions
-    const formatDateTime = (date: string | undefined) => {
+    const formatDateTime = (date: string | undefined): string => {
       if (!date) return 'N/A';
       return new Date(date).toLocaleString('en-US', {
         year: 'numeric',
@@ -219,6 +332,22 @@ export default defineComponent({
       });
     };
 
+    const fetchWithRetry = async <T>(fn: () => MakeRequestReturnType<T>, retries: number, delay: number): Promise<Awaited<MakeRequestReturnType<T>> | null> => {
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+          return await fn();
+        } catch (error) {
+          console.error(`Attempt ${attempt} failed:`, error);
+          if (attempt === retries) {
+            errorMessage.value = 'Failed to load messages. Please check your connection and try again.';
+            return null;
+          }
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+      return null;
+    };
+
     // API Functions
     const fetchMessages = async (page: number = 1) => {
       loadingMessages.value = true;
@@ -229,31 +358,24 @@ export default defineComponent({
           per_page: pagination.per_page.toString(),
           ...(filters.search && { search: filters.search }),
         }).toString();
-        const response = await makeRequest({
-          method: 'GET',
-          url: `${API_BASE_URL}/v1/client-message?${queryParams}`,
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
-            Accept: 'application/json',
-          },
-        });
-        console.log('fetchMessages response:', response);
 
-        if (response.status === 200) {
-          // Handle different possible response structures
-          let messageData = response.data.data;
-          if (!Array.isArray(messageData)) {
-            // If response.data.data is not an array, check alternative structures
-            if (response.data.data && Array.isArray(response.data.data.data)) {
-              messageData = response.data.data.data; // Nested data (e.g., { data: { data: [...] } })
-            } else if (Array.isArray(response.data)) {
-              messageData = response.data; // Direct array (e.g., { data: [...] })
-            } else {
-              console.warn('Unexpected response.data.data format:', response.data);
-              messageData = [];
-              errorMessage.value = 'Invalid data format received from server';
-            }
-          }
+        const response = await fetchWithRetry<Message>(
+          () =>
+            typedMakeRequest({
+              method: 'GET',
+              url: `${API_BASE_URL}/v1/client-message?${queryParams}`,
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+                Accept: 'application/json',
+              },
+            }),
+          maxRetries,
+          retryDelay
+        );
+
+        if (response && response.status === 200) {
+          const apiData = response.data as ApiResponse<Message>;
+          let messageData = Array.isArray(apiData.data.data) ? apiData.data.data : apiData.data.data ? [apiData.data.data] : [];
 
           messages.value = messageData.map((msg: any) => ({
             id: msg.id,
@@ -264,20 +386,30 @@ export default defineComponent({
             is_read: !!msg.is_read,
             created_at: msg.created_at || '',
             updated_at: msg.updated_at || '',
-          }));
+          })) as Message[];
 
-          // Handle pagination metadata
-          const paginationData = response.data.pagination || response.data.meta || {};
-          pagination.total = paginationData.total || messageData.length || 0;
-          pagination.per_page = paginationData.per_page || 10;
-          pagination.current_page = paginationData.current_page || page;
-          pagination.last_page = paginationData.last_page || 1;
+          // Update pagination metadata, using nullish coalescing to safely get values
+          pagination.total = Number(apiData.data.total) ?? messages.value.length;
+          pagination.per_page = Number(apiData.data.per_page) ?? pagination.per_page;
+          pagination.current_page = Number(apiData.data.current_page) ?? page;
+          pagination.last_page = Number(apiData.data.last_page) ?? paginationComputed.value.last_page;
 
-          if (messages.value.length === 0) {
-            errorMessage.value = 'No messages found. Try adding a new message or adjusting the search.';
+
+          // Ensure current_page is within valid bounds
+          if (pagination.current_page > paginationComputed.value.last_page && pagination.per_page !== -1 && paginationComputed.value.last_page > 0) {
+            pagination.current_page = paginationComputed.value.last_page;
+            await fetchMessages(pagination.current_page);
+            return;
           }
+
+          if (messages.value.length === 0 && !filters.search) {
+             errorMessage.value = 'No messages found. Try adding a new message.';
+          } else if (messages.value.length === 0 && filters.search) {
+             errorMessage.value = 'No messages found for your current search. Try adjusting the search.';
+          }
+
         } else {
-          errorMessage.value = response.data?.message || 'Failed to fetch messages';
+          errorMessage.value = response?.data?.message || 'Failed to fetch messages';
           showToast('error', errorMessage.value);
           messages.value = [];
         }
@@ -291,54 +423,69 @@ export default defineComponent({
       }
     };
 
-    const debouncedFetchMessages = debounce(fetchMessages, 500);
+    const debouncedFetchMessages = debounce((page: number = 1) => {
+      pagination.current_page = page;
+      fetchMessages(page);
+    }, 500);
 
+    const retryFetch = async () => {
+      errorMessage.value = '';
+      await fetchMessages(pagination.current_page);
+    };
+
+    const clearSearch = () => {
+      filters.search = '';
+      debouncedFetchMessages(1);
+    };
+
+    // debouncedHandleSubmit logic is now only relevant for 'add' mode, as 'edit' is removed.
     const debouncedHandleSubmit = debounce(
       async (payload: any, mode: 'add' | 'edit') => {
+        if (mode === 'edit') return; // Ignore 'edit' submissions
+
         isLoading.value = true;
         try {
-          let response;
-          if (mode === 'add') {
-            response = await makeRequest({
-              method: 'POST',
-              url: `${API_BASE_URL}/v1/client-message`,
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-              },
-              data: payload,
-            });
-          } else {
-            response = await makeRequest({
-              method: 'PUT',
-              url: `${API_BASE_URL}/v1/client-message/${payload.id}`,
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-              },
-              data: payload,
-            });
-          }
+          const config = {
+            method: 'POST',
+            url: `${API_BASE_URL}/v1/client-message`,
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+            },
+            data: payload,
+          };
+
+          const response = await typedMakeRequest<Message>(config);
+
           if ([200, 201].includes(response.status)) {
-            await fetchMessages(pagination.current_page);
+            await fetchMessages(1); // Fetch the first page to see the new message
             cancelForm();
-            showToast('success', response.data.message || `Message ${mode === 'add' ? 'created' : 'updated'} successfully`);
-            componentKey.value++;
+            showToast('success', (response.data as ApiResponse<any>).message || `Message created successfully`);
           } else {
-            showToast('error', response.data?.message || `Failed to ${mode === 'add' ? 'create' : 'update'} message`);
+             const apiResponse = response.data as ApiResponse<any>;
+             showToast('error', apiResponse.message || `Failed to create message`);
           }
         } catch (error: any) {
-          console.error(`${mode}Message error:`, error.response?.data || error.message);
-          const errorMessage =
-            error.response?.data?.errors &&
-            Array.isArray(Object.values(error.response.data.errors)) &&
-            Object.values(error.response.data.errors)[0] &&
-            Array.isArray(Object.values(error.response.data.errors)[0])
-              ? (Object.values(error.response.data.errors)[0] as string[])[0]
-              : error.response?.data?.message || `Failed to ${mode === 'add' ? 'create' : 'update'} message`;
-          showToast('error', errorMessage);
+          console.error(`add Message error:`, error.response?.data || error.message);
+          const errorResponse = error.response?.data as ApiResponse<any> | undefined;
+          let errorMsg = `Failed to create message`;
+
+          if (errorResponse?.errors) {
+            const firstErrorKey = Object.keys(errorResponse.errors)[0];
+            const firstErrorMessage = errorResponse.errors[firstErrorKey]?.[0];
+            if (firstErrorMessage) {
+              errorMsg = firstErrorMessage;
+            } else if (errorResponse.message) {
+              errorMsg = errorResponse.message;
+            }
+          } else if (error.response?.data?.message) {
+             errorMsg = error.response.data.message;
+          } else if (error.message) {
+             errorMsg = error.message;
+          }
+
+          showToast('error', errorMsg);
         } finally {
           isLoading.value = false;
         }
@@ -348,42 +495,15 @@ export default defineComponent({
     );
 
     const openForm = async (message: Message | null, mode: 'add' | 'edit') => {
-      if (message && mode === 'edit') {
-        try {
-          const response = await makeRequest({
-            method: 'GET',
-            url: `${API_BASE_URL}/v1/client-message/${message.id}`,
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
-              Accept: 'application/json',
-            },
-          });
-          console.log('openForm response:', response);
-          if (response.status === 200) {
-            selectedMessage.value = {
-              id: response.data.data.id,
-              name: response.data.data.name || '',
-              email: response.data.data.email || '',
-              subject: response.data.data.subject || '',
-              message: response.data.data.message || '',
-              is_read: !!response.data.data.is_read,
-              created_at: response.data.data.created_at || '',
-              updated_at: response.data.data.updated_at || '',
-            };
-            formMode.value = mode;
-            addEditForm.value = true;
-          } else {
-            showToast('error', response.data?.message || 'Failed to load message for editing');
-          }
-        } catch (error: any) {
-          console.error('openForm error:', error.response?.data || error.message);
-          showToast('error', error.response?.data?.message || 'Failed to load message for editing');
-        }
-      } else {
-        selectedMessage.value = null;
-        formMode.value = mode;
-        addEditForm.value = true;
+      // Allow 'add' mode, but block 'edit' mode.
+      if (mode === 'edit') {
+        console.warn('Edit functionality is disabled.');
+        return;
       }
+      
+      selectedMessage.value = null;
+      formMode.value = mode;
+      addEditForm.value = true;
     };
 
     const cancelForm = async () => {
@@ -424,7 +544,7 @@ export default defineComponent({
     const handleDelete = async (id: number) => {
       isLoading.value = true;
       try {
-        const response = await makeRequest({
+        const response = await typedMakeRequest<any>({
           method: 'DELETE',
           url: `${API_BASE_URL}/v1/client-message/${id}`,
           headers: {
@@ -432,13 +552,15 @@ export default defineComponent({
             Accept: 'application/json',
           },
         });
-        console.log('deleteMessage response:', response);
         if (response.status === 204 || response.status === 200) {
-          showToast('success', response.data?.message || 'Message deleted successfully');
+          showToast('success', (response.data as ApiResponse<any>).message || 'Message deleted successfully');
+          // Adjust page if current page is empty
+          if (messages.value.length === 1 && pagination.current_page > 1 && pagination.per_page !== -1) {
+            pagination.current_page--;
+          }
           await fetchMessages(pagination.current_page);
-          componentKey.value++;
         } else {
-          showToast('error', response.data?.message || 'Failed to delete message');
+          showToast('error', (response.data as ApiResponse<any>).message || 'Failed to delete message');
         }
       } catch (error: any) {
         console.error('deleteMessage error:', error.response?.data || error.message);
@@ -449,12 +571,22 @@ export default defineComponent({
     };
 
     const handlePageChange = async (page: number) => {
+      if (pagination.per_page === -1) return; // No pagination for "All"
+      if (page < 1 || page > paginationComputed.value.last_page) return; // Prevent invalid page navigation
+
+      pagination.current_page = page;
       await fetchMessages(page);
-      componentKey.value++;
     };
 
     // Lifecycle Hooks
     onMounted(async () => {
+      // Check for Loader component existence
+      try {
+        await import('../../../../components/Loader.vue');
+      } catch (error) {
+        console.warn('Loader component not found, using fallback:', error);
+        hasLoaderComponent.value = false;
+      }
       await fetchMessages();
     });
 
@@ -464,13 +596,16 @@ export default defineComponent({
       isLoading,
       errorMessage,
       filters,
-      pagination,
+      pagination: pagination,
       selectedMessage,
       formMode,
       addEditForm,
       showView,
-      componentKey,
+      hasLoaderComponent,
       columns,
+      perPageOptions,
+      paginationPages,
+      paginationComputed,
       formatDateTime,
       debouncedFetchMessages,
       debouncedHandleSubmit,
@@ -480,12 +615,18 @@ export default defineComponent({
       closeView,
       confirmDelete,
       handlePageChange,
+      retryFetch,
+      clearSearch,
     };
   },
 });
 </script>
 
 <style scoped>
+/*
+  The styles are the same as the previous responsive version.
+  The changes were primarily in the template and script logic.
+*/
 .bg-white {
   background-color: #ffffff;
 }
@@ -495,11 +636,18 @@ export default defineComponent({
 .rounded-lg {
   border-radius: 0.5rem;
 }
+/* Simplified padding for better mobile feel */
+.p-4 {
+  padding: 1rem;
+}
 .p-6 {
   padding: 1.5rem;
 }
-.p-4 {
-  padding: 1rem;
+.sm\:p-6 {
+  /* Only apply the larger padding on small screens and up */
+  @media (min-width: 640px) {
+    padding: 1.5rem;
+  }
 }
 .mb-4 {
   margin-bottom: 1rem;
@@ -509,6 +657,9 @@ export default defineComponent({
 }
 .flex {
   display: flex;
+}
+.flex-col {
+  flex-direction: column;
 }
 .justify-between {
   justify-content: space-between;
@@ -525,25 +676,65 @@ export default defineComponent({
 .space-y-2 > :not(:last-child) {
   margin-bottom: 0.5rem;
 }
-.w-64 {
-  width: 16rem;
+.space-y-4 > :not(:last-child) {
+  margin-bottom: 1rem;
 }
+.w-full {
+  width: 100%;
+}
+.sm\:flex-row {
+  @media (min-width: 640px) {
+    flex-direction: row;
+  }
+}
+.sm\:w-64 {
+  @media (min-width: 640px) {
+    width: 16rem;
+  }
+}
+.sm\:w-32 {
+  @media (min-width: 640px) {
+    width: 8rem;
+  }
+}
+.sm\:w-auto {
+  @media (min-width: 640px) {
+    width: auto;
+  }
+}
+.sm\:space-x-4 > :not(:last-child) {
+  @media (min-width: 640px) {
+    margin-right: 1rem;
+  }
+}
+.sm\:space-y-0 > :not(:last-child) {
+  @media (min-width: 640px) {
+    margin-bottom: 0;
+  }
+}
+
 .ml-2 {
   margin-left: 0.5rem;
 }
 .text-sm {
   font-size: 0.875rem;
 }
-.text-red-500 {
-  color: #ef4444;
+.text-red-600 {
+  color: #dc2626;
 }
-.text-gray-500 {
-  color: #6b7280;
+.text-blue-600 {
+  color: #2563eb;
 }
 .text-lg {
   font-size: 1.125rem;
 }
 .font-bold {
   font-weight: 700;
+}
+.loadingSpinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
 }
 </style>

@@ -33,7 +33,6 @@
           />
         </div>
       </div>
-
       <!-- Email -->
       <div class="mb-4">
         <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -160,7 +159,6 @@
     </VaForm>
   </div>
 </template>
-
 <script lang="ts">
 import { defineComponent, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -168,7 +166,6 @@ import { useForm, useToast } from 'vuestic-ui';
 import { useAuthStore } from '../../stores/auth-store';
 import { mapActions, mapWritableState } from 'pinia';
 import type { SignupFormData, SignupPayload, ApiResponse, UserData, ErrorResponseData } from '../../types/auth';
-
 export default defineComponent({
   name: 'Signup',
   setup() {
@@ -176,7 +173,6 @@ export default defineComponent({
     const { push } = useRouter();
     const { init } = useToast();
     const isPasswordVisible = ref(false);
-
     const formData = reactive<SignupFormData>({
       first_name: '',
       last_name: '',
@@ -187,15 +183,12 @@ export default defineComponent({
       pin: '',
       role_id: 3, // Default role_id set to 3 (tenant)
     });
-
     const validationErrors = reactive<Record<string, string>>({});
-
     const passwordRules = [
       (v: string) => !!v || 'Password is required',
       (v: string) => v.length >= 8 || 'Minimum 8 characters',
       () => !validationErrors.password || validationErrors.password,
     ];
-
     return {
       formData,
       validate,
@@ -212,13 +205,12 @@ export default defineComponent({
   },
   methods: {
     ...mapActions(useAuthStore, ['signup']),
-    
+   
     async submit() {
       console.log('Starting signup process...');
-      
+     
       // Clear previous validation errors
       Object.keys(this.validationErrors).forEach((key) => delete this.validationErrors[key]);
-
       if (!this.validate()) {
         this._signingUp = false;
         this.init({
@@ -227,9 +219,7 @@ export default defineComponent({
         });
         return;
       }
-
       this._signingUp = true;
-
       try {
         const payload: SignupPayload = {
           first_name: this.formData.first_name,
@@ -241,23 +231,18 @@ export default defineComponent({
           pin: this.formData.pin,
           role_id: this.formData.role_id, // Ensure role_id is 3 (tenant)
         };
-
         console.log('Submitting signup payload:', { ...payload, role_id: payload.role_id });
-
         const response: ApiResponse<UserData> & { redirectTo?: { name?: string; path?: string } } = await this.signup(payload);
         console.log('Signup response received:', response);
-
         // Handle successful registration
-        if ('id' in response.data.data && response.status === 201) {
-          const userData = response.data.data as UserData;
+        if ('id' in (response.data as any).data && response.status === 201) {
+          const userData = (response.data as any).data as UserData;
           console.log('Registration successful. User data:', userData);
-
           // Store user ID for account activation
           if (userData.id) {
             localStorage.setItem('pending_user_id', userData.id.toString());
             console.log('Stored pending user ID:', userData.id);
           }
-
           // Handle case where token is provided (immediate login)
           if (userData.token && response.redirectTo) {
             this.init({
@@ -267,13 +252,11 @@ export default defineComponent({
             this.push(response.redirectTo);
             return;
           }
-
           // Show success message for account activation
           this.init({
             message: 'Registration successful! Please check your email to activate your account.',
             color: 'success',
           });
-
           // Navigate to activation page
           console.log('Navigating to activation page...');
           this.push({
@@ -284,7 +267,7 @@ export default defineComponent({
             },
           });
         } else {
-          const errorData = response.data.data as ErrorResponseData;
+          const errorData = (response.data as any).data as ErrorResponseData;
           console.error('Registration failed with message:', errorData.message);
           this.validationErrors['general'] = errorData.message || 'Registration failed.';
           this.init({
@@ -294,13 +277,11 @@ export default defineComponent({
         }
       } catch (error: any) {
         console.error('Signup error caught:', error);
-        
+       
         const errorResponse = error.response;
-        const errorData = errorResponse?.data?.data as ErrorResponseData | undefined;
-
+        const errorData = (errorResponse?.data as any)?.data as ErrorResponseData | undefined;
         console.log('Error response:', errorResponse);
         console.log('Error data:', errorData);
-
         // Handle validation errors (422)
         if (errorResponse?.status === 422 && errorData?.errors) {
           console.log('Validation errors detected:', errorData.errors);
@@ -319,9 +300,9 @@ export default defineComponent({
             message: errorMessage,
             color: 'danger',
           });
-        } 
+        }
         // Handle duplicate entry errors (409)
-        else if (errorResponse?.status === 409 || 
+        else if (errorResponse?.status === 409 ||
                  (errorData?.message && (
                    errorData.message.toLowerCase().includes('already exists') ||
                    errorData.message.toLowerCase().includes('duplicate') ||
@@ -342,10 +323,10 @@ export default defineComponent({
           });
         }
         // Handle registration success with email sending failure (500)
-        else if (errorResponse?.status === 500 && 
+        else if (errorResponse?.status === 500 &&
                  errorData?.message === 'User registered, but failed to send OTP email') {
           console.log('Registration successful but email sending failed');
-          const userId = errorData?.data?.id || errorData?.data?.user_id;
+          const userId = (errorData as any)?.data?.id || (errorData as any)?.data?.user_id;
           if (userId) {
             localStorage.setItem('pending_user_id', userId.toString());
             this.push({
@@ -401,23 +382,19 @@ export default defineComponent({
   },
 });
 </script>
-
 <style scoped>
 @media (max-width: 640px) {
   .grid-cols-2 {
     grid-template-columns: 1fr;
   }
 }
-
 .bordered-input .va-input-wrapper {
   border: 1px solid #d1d5db !important;
   border-radius: 4px;
 }
-
 .bordered-input .va-input-wrapper:hover {
   border-color: #9ca3af !important;
 }
-
 .bordered-input .va-input-wrapper.focused {
   border-color: #2563eb !important;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);

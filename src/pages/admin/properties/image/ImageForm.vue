@@ -1,9 +1,9 @@
 <template>
-  <div class="p-4 sm:p-6 bg-white shadow-md rounded-lg max-w-full overflow-x-auto">
-    <h2 class="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-800">Add New Image</h2>
-    <div class="mb-6 p-4 bg-gray-100 rounded-lg">
-      <h3 class="text-base sm:text-lg font-semibold text-gray-700">Upload Requirements</h3>
-      <ul class="list-disc pl-5 text-sm sm:text-base text-gray-600">
+  <div class="form-container">
+    <h2 class="form-title">Add New Image</h2>
+    <div class="requirements-container">
+      <h3 class="requirements-title">Upload Requirements</h3>
+      <ul class="requirements-list">
         <li>Allowed formats: {{ requirements.allowed_formats.join(', ') }}</li>
         <li>Maximum size per image: {{ requirements.max_size }}</li>
         <li>Minimum images per property: {{ requirements.min_images_per_property }}</li>
@@ -12,9 +12,9 @@
         <li v-for="(note, index) in requirements.notes" :key="index">{{ note }}</li>
       </ul>
     </div>
-    <form @submit.prevent="submitForm">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-        <div class="mb-4 sm:mb-6">
+    <form @submit.prevent="submitForm" class="image-form">
+      <div class="form-grid">
+        <div class="form-field">
           <VaSelect
             v-model="form.property_id"
             label="Property"
@@ -26,12 +26,14 @@
             :loading="loadingProperties"
             :disabled="isSubmitting || !properties.length"
             required
+            aria-label="Select property for image upload"
+            class="form-select"
           />
-          <p v-if="!properties.length && !loadingProperties" class="text-red-500 text-sm mt-1">
+          <p v-if="!properties.length && !loadingProperties" class="error-text">
             No properties available (all have maximum images).
           </p>
         </div>
-        <div class="mb-4 sm:mb-6">
+        <div class="form-field">
           <VaInput
             v-model="form.caption"
             label="Caption"
@@ -39,52 +41,66 @@
             :error-messages="errors.caption ? [errors.caption] : []"
             :disabled="isSubmitting"
             :maxlength="requirements.caption_max_length"
+            aria-label="Enter image caption"
+            class="form-input"
           />
         </div>
-        <div class="mb-4 sm:mb-6">
-          <label class="block text-sm font-medium text-gray-700">Images</label>
+        <div class="form-field">
+          <label class="file-label">Images</label>
           <input
             type="file"
             multiple
             :accept="requirements.allowed_formats.map((fmt) => `image/${fmt}`).join(',')"
             :disabled="isSubmitting || !form.property_id"
-            class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            class="file-input"
             @change="handleMultipleFileChange"
+            aria-label="Upload images"
           />
-          <p v-if="errors.image" class="text-red-500 text-sm mt-1">{{ errors.image }}</p>
-          <div v-if="imagePreviews.length" class="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-            <div v-for="(preview, index) in imagePreviews" :key="index" class="relative p-2 bg-gray-50 rounded-lg border min-w-0">
+          <p v-if="errors.image" class="error-text">{{ errors.image }}</p>
+          <div v-if="imagePreviews.length" class="preview-grid">
+            <div v-for="(preview, index) in imagePreviews" :key="index" class="preview-item">
               <img
                 :src="preview.url"
                 :alt="`Image Preview ${index + 1}`"
-                class="max-h-32 w-full object-cover rounded aspect-square"
+                class="preview-image"
               />
               <button
                 type="button"
-                class="absolute top-1 right-1 text-red-500 hover:text-red-700 z-10"
+                class="remove-button"
                 :disabled="isSubmitting"
                 @click="removePreview(index)"
+                aria-label="Remove image preview"
               >
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="remove-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
           </div>
-          <div v-if="uploadProgress > 0" class="mt-2">
-            <p class="text-sm text-gray-600">Upload Progress: {{ uploadProgress }}%</p>
-            <div class="w-full bg-gray-200 rounded h-2">
-              <div class="bg-blue-600 h-2 rounded" :style="{ width: `${uploadProgress}%` }"></div>
+          <div v-if="uploadProgress > 0" class="progress-container">
+            <p class="progress-text">Upload Progress: {{ uploadProgress }}%</p>
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: `${uploadProgress}%` }"></div>
             </div>
           </div>
         </div>
       </div>
-      <div class="flex justify-end space-x-3 mt-4 sm:mt-6">
-        <VaButton color="secondary" :disabled="isSubmitting" @click="resetForm">Cancel</VaButton>
+      <div class="form-actions">
+        <VaButton
+          color="secondary"
+          :disabled="isSubmitting"
+          @click="resetForm"
+          class="cancel-button"
+          aria-label="Cancel image upload"
+        >
+          Cancel
+        </VaButton>
         <VaButton
           color="#00A3E0"
           type="submit"
           :disabled="isSubmitting || !form.property_id || !form.images.length"
+          class="submit-button"
+          aria-label="Submit image upload"
         >
           <div v-if="isSubmitting" class="spinner" />
           <span v-else>Submit</span>
@@ -512,7 +528,299 @@ export default defineComponent({
 });
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
+.form-container {
+  background-color: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  max-width: 100%;
+  overflow-x: auto;
+
+  @media screen and (min-width: 768px) {
+    padding: 1rem;
+  }
+}
+
+.form-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: #374151;
+
+  @media screen and (min-width: 768px) {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
+}
+
+.requirements-container {
+  background-color: #f3f4f6;
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+}
+
+.requirements-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    font-size: 1rem;
+  }
+}
+
+.requirements-list {
+  list-style: disc;
+  padding-left: 1.25rem;
+  font-size: 0.75rem;
+  color: #4b5563;
+
+  @media screen and (min-width: 768px) {
+    font-size: 0.875rem;
+  }
+}
+
+.image-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    gap: 0.75rem;
+  }
+}
+
+.form-field {
+  width: 100%;
+}
+
+.form-input,
+.form-select {
+  font-size: 0.875rem;
+
+  :deep(.va-input__label),
+  :deep(.va-select__label) {
+    font-size: 0.875rem;
+    color: #374151;
+    margin-bottom: 0.25rem;
+  }
+
+  :deep(.va-input__input),
+  :deep(.va-select__input) {
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+  }
+
+  :deep(.va-input__error-message),
+  :deep(.va-select__error-message) {
+    font-size: 0.75rem;
+    color: #ef4444;
+    margin-top: 0.25rem;
+  }
+
+  @media screen and (min-width: 768px) {
+    font-size: 1rem;
+
+    :deep(.va-input__label),
+    :deep(.va-select__label) {
+      font-size: 1rem;
+    }
+
+    :deep(.va-input__input),
+    :deep(.va-select__input) {
+      padding: 0.75rem;
+    }
+
+    :deep(.va-input__error-message),
+    :deep(.va-select__error-message) {
+      font-size: 0.875rem;
+    }
+  }
+}
+
+.file-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.25rem;
+
+  @media screen and (min-width: 768px) {
+    font-size: 1rem;
+  }
+}
+
+.file-input {
+  width: 100%;
+  font-size: 0.75rem;
+  color: #4b5563;
+
+  &::file-selector-button {
+    margin-right: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.25rem;
+    background-color: #e0f2fe;
+    color: #1e40af;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+
+    &:hover {
+      background-color: #bfdbfe;
+    }
+  }
+
+  @media screen and (min-width: 768px) {
+    font-size: 0.875rem;
+
+    &::file-selector-button {
+      font-size: 0.875rem;
+    }
+  }
+}
+
+.error-text {
+  font-size: 0.75rem;
+  color: #ef4444;
+  margin-top: 0.25rem;
+
+  @media screen and (min-width: 768px) {
+    font-size: 0.875rem;
+  }
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
+
+  @media screen and (min-width: 1024px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.preview-item {
+  position: relative;
+  padding: 0.5rem;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  min-width: 0;
+}
+
+.preview-image {
+  max-height: 8rem;
+  width: 100%;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  aspect-ratio: 1/1;
+}
+
+.remove-button {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  color: #ef4444;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+
+  &:hover {
+    color: #b91c1c;
+  }
+}
+
+.remove-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.progress-container {
+  margin-top: 0.5rem;
+}
+
+.progress-text {
+  font-size: 0.75rem;
+  color: #4b5563;
+
+  @media screen and (min-width: 768px) {
+    font-size: 0.875rem;
+  }
+}
+
+.progress-bar {
+  width: 100%;
+  background-color: #e5e7eb;
+  border-radius: 0.25rem;
+  height: 0.5rem;
+  overflow: hidden;
+}
+
+.progress-fill {
+  background-color: #2563eb;
+  height: 100%;
+  border-radius: 0.25rem;
+  transition: width 0.3s ease-in-out;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+}
+
+.cancel-button,
+.submit-button {
+  min-height: 40px;
+  min-width: 40px;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+  }
+}
+
+.submit-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .spinner {
   width: 1rem;
   height: 1rem;
@@ -521,6 +829,228 @@ export default defineComponent({
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-right: 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .form-container {
+    padding: 0.5rem;
+  }
+
+  .form-title {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .requirements-container {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .requirements-title {
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .requirements-list {
+    font-size: 0.625rem;
+    padding-left: 1rem;
+  }
+
+  .image-form {
+    gap: 0.25rem;
+  }
+
+  .form-grid {
+    gap: 0.25rem;
+  }
+
+  .form-input,
+  .form-select {
+    font-size: 0.75rem;
+
+    :deep(.va-input__label),
+    :deep(.va-select__label) {
+      font-size: 0.75rem;
+    }
+
+    :deep(.va-input__input),
+    :deep(.va-select__input) {
+      padding: 0.375rem;
+    }
+
+    :deep(.va-input__error-message),
+    :deep(.va-select__error-message) {
+      font-size: 0.625rem;
+    }
+  }
+
+  .file-label {
+    font-size: 0.75rem;
+  }
+
+  .file-input {
+    font-size: 0.625rem;
+
+    &::file-selector-button {
+      padding: 0.375rem 0.75rem;
+      font-size: 0.625rem;
+    }
+  }
+
+  .error-text {
+    font-size: 0.625rem;
+  }
+
+  .preview-grid {
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+  }
+
+  .preview-item {
+    padding: 0.25rem;
+  }
+
+  .preview-image {
+    max-height: 6rem;
+  }
+
+  .remove-icon {
+    width: 1rem;
+    height: 1rem;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .progress-text {
+    font-size: 0.625rem;
+  }
+
+  .progress-bar {
+    height: 0.375rem;
+  }
+
+  .form-actions {
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+  }
+
+  .cancel-button,
+  .submit-button {
+    font-size: 0.625rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .spinner {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-container {
+    padding: 0.25rem;
+  }
+
+  .form-title {
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .requirements-container {
+    padding: 0.25rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .requirements-title {
+    font-size: 0.625rem;
+  }
+
+  .requirements-list {
+    font-size: 0.5rem;
+    padding-left: 0.75rem;
+  }
+
+  .form-input,
+  .form-select {
+    font-size: 0.625rem;
+
+    :deep(.va-input__label),
+    :deep(.va-select__label) {
+      font-size: 0.625rem;
+    }
+
+    :deep(.va-input__input),
+    :deep(.va-select__input) {
+      padding: 0.25rem;
+    }
+
+    :deep(.va-input__error-message),
+    :deep(.va-select__error-message) {
+      font-size: 0.5rem;
+    }
+  }
+
+  .file-label {
+    font-size: 0.625rem;
+  }
+
+  .file-input {
+    font-size: 0.5rem;
+
+    &::file-selector-button {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.5rem;
+    }
+  }
+
+  .error-text {
+    font-size: 0.5rem;
+  }
+
+  .preview-image {
+    max-height: 5rem;
+  }
+
+  .remove-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .progress-text {
+    font-size: 0.5rem;
+  }
+
+  .progress-bar {
+    height: 0.25rem;
+  }
+
+  .form-actions {
+    gap: 0.125rem;
+    margin-top: 0.25rem;
+  }
+
+  .cancel-button,
+  .submit-button {
+    font-size: 0.5rem;
+    padding: 0.2rem 0.4rem;
+  }
+
+  .spinner {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+}
 </style>

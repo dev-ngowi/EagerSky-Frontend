@@ -77,7 +77,7 @@ const isAuthenticated = computed(() => {
 });
 
 const accountRoutes = computed(() => {
-  const routes = (webNavigation?.routes || []).find((route) => route.name === 'my-account')?.children || [];
+  const routes = (webNavigation?.routes || []).find((route) => route.name === 'tenant-dashboard')?.children || [];
   console.log('Account routes from webNavigation:', routes);
   return routes;
 });

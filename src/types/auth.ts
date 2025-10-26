@@ -1,6 +1,8 @@
 import { AxiosResponse } from 'axios';
 
-// Form data interface for signup form
+// ================= FORM & PAYLOAD INTERFACES =================
+
+// Form data interface for signup form (used in Vue forms)
 export interface SignupFormData {
   first_name: string;
   last_name: string;
@@ -30,6 +32,7 @@ export interface LoginPayload {
   email?: string;
   password?: string;
   pin?: string;
+  redirect?: string;
 }
 
 // Payload interface for OTP verification
@@ -43,14 +46,17 @@ export interface ResendOtpPayload {
   email: string;
 }
 
-// Error response data from API
+// ================= RESPONSE DATA INTERFACES =================
+
+// Error response data from API (base structure for failed requests)
 export interface ErrorResponseData {
-  message: string;
+  message: string; // Required for type narrowing (TS2430 error fix)
   errors?: Record<string, string[]>;
   data?: { id?: string; user_id?: string };
-  requires_2fa?: boolean; // Added for 2FA check
-  email?: string; // Added for email in 403 response
-  user_id?: string; // Added for user_id in 403 response
+  requires_2fa?: boolean;
+  email?: string;
+  user_id?: string;
+  debug?: any; // For debug information in error responses
 }
 
 // User data returned from API
@@ -74,14 +80,60 @@ export interface UserData {
   requires_2fa?: boolean;
 }
 
-// API response type for success and error cases
-export type ApiResponse<T> = AxiosResponse<{
-  data: T | ErrorResponseData;
-  status: number;
-}> & {
-  redirectTo?: {
-    name?: string;
-    path?: string;
-    query?: { email?: string; user_id?: string }; // Added query for redirectTo
+// Data structure for successful resend OTP response
+export interface ResendOtpSuccessData {
+  user_id?: string; // Direct user ID
+  user?: { // Nested user object for user ID
+    id: string;
   };
+  id?: string; // Root level ID
+  message: string;
+  email?: string;
+}
+
+// Union type for resend OTP data
+export type ResendOtpData = ResendOtpSuccessData | ErrorResponseData;
+
+// Data structure for successful verify OTP response
+export interface VerifyOtpResponseData {
+  redirectTo?:
+    | string
+    | {
+        name?: string;
+        path?: string;
+        query?: { email?: string; user_id?: string };
+      };
+  token?: string;
+  user?: UserData;
+  message: string;
+}
+
+// ================= API RESPONSE INTERFACES (AXIOS) =================
+
+// Helper type for route objects used in redirects
+export type RedirectRoute =
+  | string
+  | {
+      name?: string;
+      path?: string;
+      query?: { email?: string; user_id?: string };
+    };
+
+// API response type specifically for resend OTP
+// FIX: Correctly uses the generic type parameter T for AxiosResponse
+export interface ResendOtpApiResponse extends AxiosResponse<ResendOtpData> {
+  // Inherits 'data: ResendOtpData' and 'status: number'
+}
+
+// API response type specifically for verify OTP
+// FIX: Correctly uses the generic type parameter T for AxiosResponse (TS2430 fix)
+export interface VerifyOtpApiResponse extends AxiosResponse<VerifyOtpResponseData | ErrorResponseData> {
+  // Direct property for backward compatibility, although data.redirectTo is preferred
+  redirectTo?: RedirectRoute;
+}
+
+// Generic API response type for other endpoints
+export type ApiResponse<T> = AxiosResponse<T | ErrorResponseData> & {
+  // Add direct redirectTo for convenience outside the data payload
+  redirectTo?: RedirectRoute;
 };

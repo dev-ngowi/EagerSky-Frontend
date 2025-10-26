@@ -11,7 +11,7 @@
     
     <div id="hero-carousel" class="carousel slide" data-bs-ride="carousel" data-bs-interval="5000">
       <div class="carousel-inner">
-        <div class="carousel-item" :class="{ active: isLoading }" v-if="isLoading">
+        <div class="carousel-item" :class="{ active: isLoading || isDataLoading }" v-if="isLoading || isDataLoading">
           <div class="hero-slide loading-slide">
             <div class="carousel-container">
               <div class="hero-content">
@@ -21,17 +21,18 @@
                     <div class="double-bounce2"></div>
                   </div>
                 </div>
-                <p class="hero-subtitle animate-fade-in">Please wait while we load</p>
+                <p class="hero-subtitle animate-fade-in">Finding your perfect match</p>
                 <h1 class="hero-title animate-slide-up">
-                  <span class="highlight">Amazing Properties</span>
-                  <br>Coming Your Way
+                  <span class="highlight">EagerSky Realty</span>
+                  <br>Your Dream Home Awaits
                 </h1>
                 <p class="hero-description animate-fade-in-delayed">
-                  Discover your dream property with EagerSky Realty
+                  Discover curated properties with ease and confidence.
                 </p>
                 <div class="loading-progress">
                   <div class="progress-bar"></div>
                 </div>
+                <div class="hero-filter-bar loading-bar animate-slide-up"></div>
               </div>
             </div>
           </div>
@@ -39,7 +40,7 @@
 
         <div 
           class="carousel-item" 
-          :class="{ active: !isLoading && index === 0 }" 
+          :class="{ active: !isLoading && !isDataLoading && index === 0 }" 
           v-for="(property, index) in sampleProperties" 
           :key="index"
         >
@@ -49,56 +50,72 @@
               '--bg-image-desktop': `url(${property.image})`, 
               '--bg-image-mobile': `url(${property.mobileImage || property.image})` 
             }"
+            @click="goToNextSlide"
+            style="cursor: pointer;"
           >
             <div class="carousel-container">
-              <div class="hero-content">
-                <p class="hero-subtitle animate-fade-in">{{ property.type }}</p>
-                <h1 class="hero-title animate-slide-up">
-                  <span class="highlight">{{ property.title }}</span>
-                </h1>
-                <p class="hero-description animate-fade-in-delayed">
-                  {{ property.description }}
-                </p>
-                <div class="hero-actions animate-bounce-in">
-                  <router-link :to="{ name: 'all-properties' }" class="btn btn-primary btn-get-started">
-                    <i class="bi bi-search"></i>
-                    Explore Properties
-                  </router-link>
-                  <router-link :to="{ name: 'contact' }" class="btn btn-outline-light btn-contact">
-                    <i class="bi bi-telephone"></i>
-                    Contact Us
-                  </router-link>
+              <div class="hero-content image-only-content">
+                
+                <div class="hero-filter-bar animate-bounce-in">
+                  
+                  <div class="filter-group grok-search-group">
+                    <label for="hero-grok-search" class="filter-label">Search</label>
+                    <input 
+                      id="hero-grok-search" 
+                      type="text" 
+                      v-model="filters.grokSearch" 
+                      class="filter-input" 
+                      placeholder="e.g., street, area, zip..."
+                      aria-label="Search items by keyword" 
+                      :disabled="isDataLoading"
+                    >
+                  </div>
+                  
+                  <div class="filter-group category-filter">
+                    <label for="hero-category" class="filter-label">Category</label>
+                    <select id="hero-category" v-model="filters.category" class="filter-select" aria-label="Select property category" :disabled="isDataLoading">
+                      <option value="">Any Category</option>
+                      <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                    </select>
+                  </div>
+                  
+                  <div class="filter-group location-filter">
+                    <label for="hero-location" class="filter-label">Location</label>
+                    <select id="hero-location" v-model="filters.location" class="filter-select" aria-label="Select property location" :disabled="isDataLoading">
+                      <option value="">Any Location</option>
+                      <option v-for="loc in locations" :key="loc.id" :value="loc.id">{{ loc.name }}</option>
+                    </select>
+                  </div>
+                  
+                  <div class="filter-group search-button-group">
+                    <button class="btn btn-primary btn-search-hero p-4" @click.stop="applyFilters" aria-label="Search properties" :disabled="isDataLoading">
+                      Explore
+                    </button>
+                  </div>
                 </div>
-                <div class="hero-stats">
-                  <div class="stat-item">
-                    <span class="stat-number">{{ property.price }}</span>
-                    <span class="stat-label">Starting Price</span>
-                  </div>
-                  <div class="stat-item">
-                    <span class="stat-number">{{ property.bedrooms }}</span>
-                    <span class="stat-label">Bedrooms</span>
-                  </div>
-                  <div class="stat-item">
-                    <span class="stat-number">{{ property.location }}</span>
-                    <span class="stat-label">Location</span>
-                  </div>
-                </div>
+                
+                 <div class="hero-actions animate-bounce-in-delayed">
+                   <router-link :to="{ name: 'contact' }" class="btn btn-outline-light btn-contact">
+                     <i data-feather="phone"></i>
+                     Contact Us
+                   </router-link>
+                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <button class="carousel-control-prev" type="button" data-bs-target="#hero-carousel" data-bs-slide="prev">
+      <button class="carousel-control-prev" type="button" data-bs-target="#hero-carousel" data-bs-slide="prev" :disabled="isLoading || isDataLoading">
         <span class="carousel-control-prev-icon">
-          <i class="bi bi-chevron-left"></i>
+          <i data-feather="chevron-left"></i>
         </span>
         <span class="visually-hidden">Previous</span>
       </button>
       
-      <button class="carousel-control-next" type="button" data-bs-target="#hero-carousel" data-bs-slide="next">
+      <button class="carousel-control-next" type="button" data-bs-target="#hero-carousel" data-bs-slide="next" :disabled="isLoading || isDataLoading">
         <span class="carousel-control-next-icon">
-          <i class="bi bi-chevron-right"></i>
+          <i data-feather="chevron-right"></i>
         </span>
         <span class="visually-hidden">Next</span>
       </button>
@@ -113,13 +130,14 @@
           :class="{ active: currentSlide === index }"
           :aria-current="currentSlide === index ? 'true' : 'false'"
           @click="goToSlide(index)"
+          :disabled="isLoading || isDataLoading"
         ></button>
       </div>
     </div>
 
     <div class="scroll-indicator">
       <div class="scroll-arrow">
-        <i class="bi bi-chevron-down"></i>
+        <i data-feather="chevron-down"></i>
       </div>
       <span>Scroll to explore</span>
     </div>
@@ -127,67 +145,121 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'; 
 import * as bootstrap from 'bootstrap';
+import { useRouter } from 'vue-router';
+import makeRequest from '../services/makeRequest'; 
+// Assuming a global 'feather' function is available or imported separately
+declare const feather: any;
 
-// Type definition for Bootstrap Carousel
+// --- TYPES ---
 type BootstrapCarousel = {
   to(index: number): void;
   dispose(): void;
 };
 
-const isLoading = ref(true);
-const currentSlide = ref(0);
-let carouselInstance: BootstrapCarousel | null = null;
-
-// Define the property interface for type safety
 interface Property {
   image: string;
   mobileImage?: string;
-  type: string;
-  title: string;
-  description: string;
-  price: string;
-  bedrooms: string;
-  location: string;
 }
+
+interface Location {
+  id: number | string;
+  name: string;
+}
+
+interface Category {
+  id: number | string;
+  name: string;
+}
+
+interface Filters {
+  location: number | string;
+  category: number | string;
+  grokSearch: string; 
+}
+
+// --- STATE ---
+const router = useRouter();
+const isLoading = ref(true); 
+const isDataLoading = ref(true); 
+const currentSlide = ref(0);
+let carouselInstance: BootstrapCarousel | null = null;
+
+// Filter State and Data
+const filters = ref<Filters>({
+  location: '',
+  category: '',
+  grokSearch: ''
+});
+
+const locations = ref<Location[]>([]);
+const categories = ref<Category[]>([]);
 
 // Sample properties data
 const sampleProperties = ref<Property[]>([
-  {
-    image: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80',
-    mobileImage: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?ixlib=rb-4.0.3&auto=format&fit=crop&w=750&h=1334&q=80',
-    type: 'Best Place',
-    title: 'EagerSky Villa',
-    description: 'Dear Customer, cozy home with big rooms with fordable price',
-    price: 'TZS 50K',
-    bedrooms: '4+',
-    location: 'Morogoro'
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80',
-    mobileImage: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?ixlib=rb-4.0.3&auto=format&fit=crop&w=750&h=1334&q=80',
-    type: 'Family Home',
-    title: 'Dream Family House',
-    description: 'Perfect family home with spacious rooms and beautiful garden',
-    price: '$280K',
-    bedrooms: '3+',
-    location: 'Mzumbe'
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80',
-    mobileImage: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?ixlib=rb-4.0.3&auto=format&fit=crop&w=750&h=1334&q=80',
-    type: 'Contemporary',
-    title: 'Urban Elegance',
-    description: 'Sleek contemporary design meets urban convenience',
-    price: '$320K',
-    bedrooms: '2+',
-    location: 'City Center'
-  }
+  { image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1920', mobileImage: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=750&h=1334' },
+  { image: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1920', mobileImage: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=750&h=1334' },
+  { image: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1920', mobileImage: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=750&h=1334' },
+  { image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3825e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1920', mobileImage: 'https://images.unsplash.com/photo-1580587771525-78b9dba3825e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=750&h=1334' },
+  { image: 'https://images.unsplash.com/photo-1494526585095-c4174638a2dd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1920', mobileImage: 'https://images.unsplash.com/photo-1494526585095-c4174638a2dd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=750&h=1334' },
+  { image: 'https://images.unsplash.com/photo-1554995207-c18c694d6e98?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1920', mobileImage: 'https://images.unsplash.com/photo-1554995207-c18c694d6e98?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=750&h=1334' }
 ]);
 
-const totalSlides = computed(() => (isLoading.value ? 1 : sampleProperties.value.length));
+const totalSlides = computed(() => (isLoading.value || isDataLoading.value ? 1 : sampleProperties.value.length));
 
+// --- API FETCHING (Unchanged) ---
+const fetchLocations = async () => {
+  try {
+    const response = await makeRequest({
+      method: 'GET',
+      url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/locations`,
+      requiresAuth: false
+    });
+
+    if (response.data && Array.isArray(response.data.data)) {
+      locations.value = response.data.data.map((loc: any) => ({
+        id: loc.id,
+        name: loc.name || 'Unknown Location'
+      }));
+    } else {
+      locations.value = [];
+    }
+  } catch (error) {
+    console.error('Failed to fetch locations:', error);
+    locations.value = [];
+  }
+};
+
+const fetchCategories = async () => {
+  try {
+    const response = await makeRequest({
+      method: 'GET',
+      url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/property-categories`,
+      requiresAuth: false
+    });
+
+    if (response.data && Array.isArray(response.data.data)) {
+      categories.value = response.data.data.map((cat: any) => ({
+        id: cat.id,
+        name: cat.name || 'Unknown Category'
+      }));
+    } else {
+      categories.value = [];
+    }
+  } catch (error) {
+    console.error('Failed to fetch categories:', error);
+    categories.value = [];
+  }
+};
+
+const fetchApiData = async () => {
+  isDataLoading.value = true;
+  await Promise.all([fetchLocations(), fetchCategories()]);
+  isDataLoading.value = false;
+};
+
+// --- METHODS ---
 const getFloatingStyle = (n: number) => {
   const positions = [
     { top: '20%', left: '10%', animationDelay: '0s' },
@@ -200,18 +272,57 @@ const getFloatingStyle = (n: number) => {
   return positions[n - 1] || {};
 };
 
+const goToNextSlide = () => {
+  if (carouselInstance && !isLoading.value && !isDataLoading.value) {
+    const carouselElement = document.getElementById('hero-carousel');
+    if (carouselElement) {
+      (bootstrap as any).Carousel.getInstance(carouselElement)?.next();
+    }
+  }
+};
+
 const goToSlide = (index: number) => {
-  if (carouselInstance) {
+  if (carouselInstance && !isLoading.value && !isDataLoading.value) {
     carouselInstance.to(index);
     currentSlide.value = index;
   }
 };
 
-// Initialize Bootstrap Carousel
-onMounted(() => {
+const applyFilters = () => {
+  if (isDataLoading.value) return;
+
+  const query: Record<string, string | number> = {};
+  
+  if (filters.value.grokSearch) query.search = filters.value.grokSearch;
+  if (filters.value.category) query.category = filters.value.category;
+  if (filters.value.location) query.location = filters.value.location;
+
+  router.push({ name: 'all-properties', query });
+};
+
+// --- FIX: WATCH FOR LOADING COMPLETE (Unchanged) ---
+watch([isLoading, isDataLoading], ([newLoading, newDataLoading]) => {
+  if (!newLoading && !newDataLoading) {
+    if (sampleProperties.value.length > 0) {
+      setTimeout(() => {
+        const carouselElement = document.getElementById('hero-carousel');
+        if (carouselElement) {
+            const currentCarousel = (bootstrap as any).Carousel.getInstance(carouselElement);
+            if (currentCarousel) {
+                currentCarousel.to(0); 
+                currentSlide.value = 0;
+            }
+        }
+      }, 50); 
+    }
+  }
+});
+
+// --- LIFECYCLE HOOKS (Modified to include Feather Icons rendering) ---
+onMounted(async () => {
+  // 1. Initialize Carousel First
   const carouselElement = document.getElementById('hero-carousel');
   if (carouselElement) {
-    // Create carousel instance using any type to bypass TypeScript issues
     carouselInstance = new (bootstrap as any).Carousel(carouselElement, {
       interval: 5000,
       ride: 'carousel',
@@ -219,22 +330,26 @@ onMounted(() => {
       wrap: true
     }) as BootstrapCarousel;
 
-    // Update current slide on slide change
     carouselElement.addEventListener('slide.bs.carousel', (event) => {
       const bootstrapEvent = event as Event & { to: number };
       currentSlide.value = bootstrapEvent.to;
     });
   }
 
-  // Simulate loading
+  // 2. Fetch data from APIs
+  await fetchApiData();
+
+  // 3. Mark initial component loading complete
   setTimeout(() => {
     isLoading.value = false;
-    // Ensure first slide is active after loading
-    if (carouselInstance) {
-      carouselInstance.to(0);
-      currentSlide.value = 0;
+    
+    // 💡 NEW: Render Feather Icons AFTER the DOM has updated
+    // This is crucial for Feather Icons to turn the <i> tags into SVGs
+    if (typeof feather !== 'undefined') {
+        feather.replace();
     }
-  }, 3000);
+    
+  }, 500); 
 });
 
 onUnmounted(() => {
@@ -246,9 +361,17 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
+/* Color Variables (aligned with all-listings) */
+$primary-color: #007bff;
+$accent-color: #f4a261;
+$dark-color: #2c3e50;
+$white: #ffffff;
+$secondary-color: #6c757d;
+$light-color: #e9ecef;
+
 .hero {
   position: relative;
-  min-height: 100vh;
+  min-height: 60vh;
   display: flex;
   align-items: center;
   overflow: hidden;
@@ -269,7 +392,7 @@ onUnmounted(() => {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.3);
     z-index: 2;
   }
   
@@ -328,7 +451,7 @@ onUnmounted(() => {
     position: relative;
     width: 100%;
     height: 100%;
-    background-image: var(--bg-image-desktop); 
+    background-image: var(--bg-image-desktop);
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -356,18 +479,22 @@ onUnmounted(() => {
     position: relative;
     z-index: 2;
     text-align: center;
-    max-width: clamp(600px, 80vw, 800px);
+    max-width: clamp(600px, 90vw, 1200px);
     padding: 0 clamp(15px, 5vw, 20px);
     margin: 0 auto;
   }
   
   .hero-content {
-    color: white;
-    background: rgba(0, 0, 0, 0.6);
+    color: $white;
     padding: clamp(20px, 5vw, 30px);
     border-radius: 15px;
-    backdrop-filter: blur(5px);
     
+    &.image-only-content {
+      background: none;
+      backdrop-filter: none;
+      padding: 0;
+    }
+
     .loading-animation {
       margin-bottom: clamp(1.5rem, 4vw, 2rem);
       
@@ -381,7 +508,7 @@ onUnmounted(() => {
           width: 100%;
           height: 100%;
           border-radius: 50%;
-          background-color: #007bff;
+          background-color: $primary-color;
           opacity: 0.6;
           position: absolute;
           top: 0;
@@ -411,7 +538,7 @@ onUnmounted(() => {
       line-height: 1.2;
       
       .highlight {
-        background: linear-gradient(45deg, #007bff, #00d4ff);
+        background: linear-gradient(45deg, $primary-color, #00d4ff);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
@@ -428,12 +555,146 @@ onUnmounted(() => {
       margin-right: auto;
     }
     
+    /* MODIFIED: Filter Bar Styles for wider and shorter look */
+    .hero-filter-bar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 50px;
+      padding: 8px; /* Reduced vertical padding for shorter height */
+      margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      max-width: 1200px; /* Increased max width for wider look */
+      width: 100%;
+      color: $dark-color;
+
+      &.loading-bar {
+        height: 60px;
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        box-shadow: none;
+        animation: pulse 1.5s infinite alternate;
+      }
+
+      .filter-group {
+        padding: 0; /* Removed default padding */
+        border-right: 1px solid $light-color;
+        flex: 1; 
+        
+        /* Grok search input gets more space */
+        &.grok-search-group {
+            flex: 2; /* Give grok search twice the space */
+            padding: 0 clamp(10px, 2vw, 15px);
+        }
+        
+        /* Category and Location groups get smaller fixed space on desktop */
+        &.category-filter, &.location-filter {
+            flex: 0 0 200px;
+            min-width: 0;
+            padding: 0 clamp(10px, 2vw, 15px);
+        }
+        
+        &:last-child {
+          border-right: none;
+        }
+
+        .filter-label {
+          display: block;
+          font-size: clamp(0.8rem, 2vw, 0.9rem);
+          font-weight: 600;
+          color: $secondary-color;
+          margin-bottom: 3px; /* Slightly reduced margin */
+          text-align: left;
+        }
+        
+        /* Style for the text input */
+        .filter-input {
+            width: 100%;
+            padding: 5px 0; /* Reduced vertical padding */
+            border: none;
+            background: transparent;
+            font-size: clamp(0.9rem, 2vw, 1rem);
+            font-weight: 500;
+            color: $dark-color;
+            
+            &:focus {
+                outline: none;
+            }
+            &::placeholder {
+                color: $secondary-color;
+                opacity: 0.7;
+            }
+        }
+
+        .filter-select {
+          width: 100%;
+          padding: 5px 0; /* Reduced vertical padding */
+          border: none;
+          background: transparent;
+          font-size: clamp(0.9rem, 2vw, 1rem);
+          font-weight: 500;
+          cursor: pointer;
+          color: $dark-color;
+          appearance: none;
+          /* Default dropdown arrow for consistency */
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23333' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 0.5rem center;
+          background-size: 10px;
+          
+          &:focus {
+            outline: none;
+          }
+        }
+      }
+      
+      /* Search button group (icon-only, square look) */
+      .search-button-group {
+        flex: 0 0 auto;
+        padding: 0;
+        border-right: none; 
+        
+        .btn-search-hero {
+          background: linear-gradient(45deg, $primary-color, #667eea);
+          border: none;
+          color: $white;
+          /* Adjusted padding for a compact icon-only button */
+          padding: clamp(10px, 2vw, 14px) clamp(15px, 3vw, 18px); 
+          border-radius: 50px; /* Circular look */
+          font-weight: 600;
+          transition: all 0.3s ease;
+          box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0;
+          width: clamp(40px, 8vw, 50px);
+          height: clamp(40px, 8vw, 50px);
+          
+          /* Style for the icon inside the button */
+          i, svg {
+            width: clamp(1.2rem, 2.5vw, 1.4rem);
+            height: clamp(1.2rem, 2.5vw, 1.4rem);
+            stroke: $white;
+            stroke-width: 2.5; /* Feather Icons use stroke for styling */
+            margin: 0;
+          }
+          
+          &:hover {
+            background: linear-gradient(45deg, darken($primary-color, 10%), darken(#667eea, 10%));
+            transform: translateY(0);
+          }
+        }
+      }
+    }
+    
     .hero-actions {
       display: flex;
       gap: clamp(0.8rem, 2vw, 1rem);
       justify-content: center;
       flex-wrap: wrap;
-      margin-bottom: clamp(2rem, 5vw, 3rem);
+      margin-top: clamp(1rem, 2vw, 1.5rem);
       
       .btn {
         padding: clamp(10px, 2.5vw, 12px) clamp(20px, 5vw, 30px);
@@ -447,57 +708,28 @@ onUnmounted(() => {
         transition: all 0.3s ease;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         
+        i, svg {
+          width: clamp(1rem, 2.5vw, 1.1rem);
+          height: clamp(1rem, 2.5vw, 1.1rem);
+          stroke: $white;
+          stroke-width: 2.5;
+        }
+        
         &:hover {
           transform: translateY(-2px);
           box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
         }
         
-        &.btn-primary {
-          background: linear-gradient(45deg, #007bff, #0056b3);
-          border: none;
-          color: white;
-          
-          &:hover {
-            background: linear-gradient(45deg, #0056b3, #004085);
-          }
-        }
-        
         &.btn-outline-light {
           border: 2px solid rgba(255, 255, 255, 0.8);
-          color: white;
+          color: $white;
           background: rgba(255, 255, 255, 0.1);
           backdrop-filter: blur(10px);
           
           &:hover {
             background: rgba(255, 255, 255, 0.2);
-            border-color: white;
+            border-color: $white;
           }
-        }
-      }
-    }
-    
-    .hero-stats {
-      display: flex;
-      justify-content: center;
-      gap: clamp(1rem, 3vw, 2rem);
-      flex-wrap: wrap;
-      
-      .stat-item {
-        text-align: center;
-        
-        .stat-number {
-          display: block;
-          font-size: clamp(1.2rem, 3vw, 1.5rem);
-          font-weight: 700;
-          color: #007bff;
-          margin-bottom: 0.25rem;
-        }
-        
-        .stat-label {
-          font-size: clamp(0.7rem, 2vw, 0.9rem);
-          opacity: 0.8;
-          text-transform: uppercase;
-          letter-spacing: 1px;
         }
       }
     }
@@ -514,7 +746,7 @@ onUnmounted(() => {
       
       .progress-bar {
         height: 100%;
-        background: linear-gradient(90deg, #007bff, #00d4ff);
+        background: linear-gradient(90deg, $primary-color, #00d4ff);
         border-radius: 2px;
         animation: loading 2s ease-in-out infinite;
       }
@@ -543,9 +775,12 @@ onUnmounted(() => {
     .carousel-control-next-icon {
       background: none;
       
-      i {
-        font-size: clamp(1.2rem, 3vw, 1.5rem);
-        color: white;
+      i, svg {
+        width: clamp(1.5rem, 3vw, 1.8rem);
+        height: clamp(1.5rem, 3vw, 1.8rem);
+        stroke: $white;
+        stroke-width: 2.5;
+        margin: 0;
       }
     }
   }
@@ -582,8 +817,8 @@ onUnmounted(() => {
       }
       
       &.active {
-        background: white;
-        border-color: white;
+        background: $white;
+        border-color: $white;
       }
     }
   }
@@ -594,7 +829,7 @@ onUnmounted(() => {
     left: 50%;
     transform: translateX(-50%);
     text-align: center;
-    color: white;
+    color: $white;
     z-index: 10;
     opacity: 0.8;
     
@@ -602,8 +837,12 @@ onUnmounted(() => {
       margin-bottom: 5px;
       animation: bounce 2s infinite;
       
-      i {
-        font-size: clamp(1.2rem, 3vw, 1.5rem);
+      i, svg {
+        width: clamp(1.5rem, 3vw, 1.8rem);
+        height: clamp(1.5rem, 3vw, 1.8rem);
+        stroke: $white;
+        stroke-width: 2;
+        margin: 0;
       }
     }
     
@@ -615,7 +854,7 @@ onUnmounted(() => {
   }
 }
 
-// Animations
+// Animations 
 @keyframes float {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
   33% { transform: translateY(-20px) rotate(120deg); }
@@ -623,11 +862,8 @@ onUnmounted(() => {
 }
 
 @keyframes sk-bounce {
-  0%, 100% { 
-    transform: scale(0.0);
-  } 50% { 
-    transform: scale(1.0);
-  }
+  0%, 100% { transform: scale(0.0); }
+  50% { transform: scale(1.0); }
 }
 
 @keyframes loading {
@@ -637,54 +873,69 @@ onUnmounted(() => {
 }
 
 @keyframes bounce {
-  0%, 20%, 50%, 80%, 100% {
-    transform: translateY(0);
-  }
-  40% {
-    transform: translateY(-10px);
-  }
-  60% {
-    transform: translateY(-5px);
-  }
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-10px); }
+  60% { transform: translateY(-5px); }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@keyframes bounceInDelayed {
+  0%, 60% { opacity: 0; transform: scale(0.3); }
+  75% { opacity: 1; transform: scale(1.05); }
+  85% { transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
-@keyframes slideUp {
-  from { 
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to { 
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  100% { opacity: 0.8; }
 }
 
-@keyframes bounceIn {
-  from {
-    opacity: 0;
-    transform: scale(0.3);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.05);
-  }
-  70% {
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+.animate-bounce-in-delayed {
+  animation: bounceInDelayed 1.5s ease-out forwards;
 }
 
 // Responsive Design
+@media (max-width: 992px) {
+  .hero {
+    .hero-filter-bar {
+      max-width: clamp(400px, 90vw, 800px); 
+      padding: clamp(8px, 2vw, 12px);
+      
+      .filter-group {
+        padding: 0 clamp(8px, 1.5vw, 12px);
+        
+        &.grok-search-group {
+            flex: 2;
+        }
+
+        &.category-filter, &.location-filter {
+            flex: 1;
+            min-width: 0;
+            padding: 0 clamp(8px, 1.5vw, 12px);
+        }
+        
+        .filter-select, .filter-input {
+          font-size: clamp(0.85rem, 1.8vw, 0.95rem);
+        }
+      }
+      
+      .search-button-group {
+        padding: 0;
+        
+        .btn-search-hero {
+          width: clamp(35px, 7vw, 45px);
+          height: clamp(35px, 7vw, 45px);
+          padding: clamp(8px, 1.5vw, 10px); 
+        }
+      }
+    }
+  }
+}
+
 @media (max-width: 768px) {
   .hero {
+    min-height: 80vh;
+    
     .hero-slide {
       background-image: var(--bg-image-mobile);
     }
@@ -692,64 +943,97 @@ onUnmounted(() => {
     .carousel-container {
       padding: 0 clamp(10px, 3vw, 15px);
     }
-    
+
     .hero-content {
       padding: clamp(15px, 3vw, 20px);
-      
+
+      &.image-only-content {
+        padding: 0;
+      }
+
+      .hero-filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+        max-width: 100%;
+        border-radius: 15px;
+        padding: clamp(15px, 3vw, 20px);
+
+        .filter-group {
+          padding: clamp(8px, 2vw, 12px) 0;
+          border-right: none;
+          border-bottom: 1px solid $light-color;
+          flex: 1 !important; 
+
+          &.grok-search-group, &.category-filter, &.location-filter {
+            flex: 1 !important; 
+            padding: clamp(8px, 2vw, 12px) 0;
+          }
+
+          &:last-child {
+            border-bottom: none;
+          }
+
+          .filter-label {
+            font-size: clamp(0.85rem, 2vw, 0.95rem);
+          }
+
+          .filter-select, .filter-input {
+            font-size: clamp(0.85rem, 2vw, 0.95rem);
+            padding: clamp(8px, 2vw, 10px) 0;
+          }
+        }
+
+        .search-button-group {
+          padding: clamp(10px, 2vw, 15px) 0 0 0;
+
+          .btn-search-hero {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            justify-content: center;
+            padding: clamp(10px, 2vw, 12px);
+            font-size: clamp(0.9rem, 2vw, 1rem);
+            gap: 8px;
+          }
+        }
+      }
+
       .hero-actions {
         flex-direction: column;
         align-items: center;
-        
+
         .btn {
           width: clamp(180px, 50vw, 200px);
           justify-content: center;
           padding: clamp(8px, 2vw, 10px) clamp(15px, 4vw, 20px);
-        }
-      }
-      
-      .hero-stats {
-        gap: clamp(0.8rem, 2vw, 1rem);
-        flex-direction: column;
-        
-        .stat-item {
-          .stat-number {
-            font-size: clamp(1rem, 2.5vw, 1.2rem);
-          }
-          
-          .stat-label {
-            font-size: clamp(0.6rem, 1.8vw, 0.8rem);
-          }
+          font-size: clamp(0.85rem, 2vw, 0.95rem);
         }
       }
     }
-    
+
     .carousel-control-prev,
     .carousel-control-next {
       width: clamp(35px, 8vw, 50px);
       height: clamp(35px, 8vw, 50px);
-      
-      i {
-        font-size: clamp(1rem, 2.5vw, 1.2rem);
-      }
     }
-    
+
     .carousel-control-prev {
       left: clamp(8px, 2vw, 15px);
     }
-    
+
     .carousel-control-next {
       right: clamp(8px, 2vw, 15px);
     }
-    
+
     .carousel-indicators-custom {
       bottom: clamp(15px, 4vw, 20px);
-      
+
       button {
         width: 10px;
         height: 10px;
       }
     }
-    
+
     .scroll-indicator {
       bottom: clamp(10px, 3vw, 15px);
     }
@@ -758,23 +1042,33 @@ onUnmounted(() => {
 
 @media (max-width: 480px) {
   .hero {
+    min-height: 100vh;
+
     .carousel-container {
       padding: 0 clamp(8px, 2vw, 12px);
     }
-    
+
     .hero-content {
-      padding: clamp(12px, 2.5vw, 15px);
-      
       .hero-title {
-        font-size: clamp(1.8rem, 5vw, 2rem);
+        font-size: clamp(1.8rem, 5vw, 3rem);
       }
-      
+
       .hero-description {
         font-size: clamp(0.9rem, 2.5vw, 1.1rem);
       }
-      
-      .hero-subtitle {
-        font-size: clamp(0.8rem, 2.2vw, 1rem);
+
+      .hero-filter-bar {
+        padding: clamp(10px, 2.5vw, 15px);
+
+        .filter-group {
+          .filter-label {
+            font-size: clamp(0.8rem, 2vw, 0.9rem);
+          }
+
+          .filter-select, .filter-input {
+            font-size: clamp(0.8rem, 2vw, 0.9rem);
+          }
+        }
       }
     }
   }

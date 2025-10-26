@@ -1,148 +1,194 @@
 <template>
-  <div class="bg-white shadow-md rounded-lg p-6">
-    <div class="flex justify-between items-center mb-4">
-      <div class="flex items-center space-x-4">
-        <VaInput
-          v-model="searchQuery"
-          placeholder="Search pending applications by property or user name"
-          class="w-64"
-          @input="debouncedSearch"
-        />
+  <div class="bg-white shadow-md rounded-lg p-4">
+    <template v-if="loadingApplications">
+      <div class="loading-spinner">
+        <Loader :loading-text="'Loading pending applications...'" />
       </div>
-      <div class="flex items-center space-x-4">
-        <span>Items per page:</span>
-        <VaSelect
-          v-model="pagination.per_page"
-          :options="perPageOptions"
-          class="w-24"
-          @update:modelValue="handlePerPageChange"
-        />
+    </template>
+    <template v-else-if="errorMessage">
+      <div class="error-message">
+        {{ errorMessage }}
+        <button
+          class="retry-button"
+          @click="retryFetch"
+          aria-label="Retry loading pending applications"
+        >
+          Retry
+        </button>
       </div>
-    </div>
-    <VaDataTable
-      :key="componentKey"
-      :items="applications"
-      striped
-      :columns="columns"
-      :loading="loadingApplications"
-      :per-page="pagination.per_page"
-      :current-page="pagination.current_page"
-      @update:currentPage="handlePageChange"
-    >
-      <template #cell(sn)="{ rowIndex }">
-        {{ (pagination.current_page - 1) * pagination.per_page + rowIndex + 1 }}
-      </template>
-      <template #cell(status)="{ rowData }">
-        <span class="px-2 py-1 rounded text-sm font-medium bg-yellow-100 text-yellow-800">
-          {{ rowData.status }}
-        </span>
-      </template>
-      <template #cell(user_name)="{ rowData }">
-        {{ rowData.first_name && rowData.last_name ? `${rowData.first_name} ${rowData.last_name}` : rowData.user_name || 'Unknown User' }}
-      </template>
-      <template #cell(actions)="{ rowData }">
-        <div class="flex space-x-2">
-          <VaButton size="small" color="primary" icon="visibility" @click="openView(rowData)" />
-          <VaButton
-            size="small"
-            color="success"
-            icon="check"
-            @click="confirmApprove(rowData)"
-            v-if="rowData.status === 'pending'"
+    </template>
+    <template v-else>
+      <div class="controls-container">
+        <div class="search-container">
+          <VaInput
+            v-model="searchQuery"
+            placeholder="Search pending applications by property or user name"
+            class="search-input"
+            :disabled="loadingApplications"
+            @input="debouncedSearch"
+            aria-label="Search pending applications by property or user name"
           />
-          <VaButton
-            size="small"
-            color="danger"
-            icon="close"
-            @click="confirmReject(rowData)"
-            v-if="rowData.status === 'pending'"
+          <VaButton v-if="searchQuery" color="warning" size="small" @click="clearSearch" aria-label="Clear search query">
+            Clear Search
+          </VaButton>
+        </div>
+        <div class="per-page-container">
+          <VaSelect
+            v-model="pagination.per_page"
+            :options="perPageOptions"
+            label="Items per page"
+            value-by="value"
+            text-by="text"
+            class="per-page-select"
+            :disabled="loadingApplications"
+            @update:modelValue="handlePerPageChange"
+            aria-label="Select items per page"
           />
         </div>
-      </template>
-    </VaDataTable>
-    <div class="flex justify-between items-center mt-4">
-      <div>
-        Showing {{ (pagination.current_page - 1) * pagination.per_page + 1 }} to
-        {{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} of
-        {{ pagination.total }} pending applications
       </div>
-      <div class="flex space-x-2">
-        <VaButton
-          size="small"
-          :disabled="pagination.current_page === 1 || loadingApplications"
-          @click="handlePageChange(pagination.current_page - 1)"
-        >
-          Previous
-        </VaButton>
-        <VaButton
-          size="small"
-          :disabled="pagination.current_page === pagination.last_page || loadingApplications"
-          @click="handlePageChange(pagination.current_page + 1)"
-        >
-          Next
-        </VaButton>
+      <div
+        v-if="!applications || (applications.length === 0 && !loadingApplications)"
+        class="no-data-message"
+      >
+        No pending applications available
       </div>
-    </div>
-
-    <!-- View Modal -->
-    <VaModal v-model="showView" size="medium" layout="centered" close-button hide-default-actions class="p-4">
-      <div class="text-lg font-bold mb-4">{{ $t('Pending Rental Application Details') }}</div>
-      <div v-if="selectedApplication" class="space-y-2">
-        <p><strong>Property:</strong> {{ selectedApplication.property_title || 'None' }}</p>
-        <p><strong>User:</strong> {{ selectedApplication.first_name && selectedApplication.last_name ? `${selectedApplication.first_name} ${selectedApplication.last_name}` : selectedApplication.user_name || 'Unknown User' }}</p>
-        <p><strong>Branch:</strong> {{ selectedApplication.branch_name || 'None' }}</p>
-        <p><strong>NIDA Number:</strong> {{ selectedApplication.nida_number || 'None' }}</p>
-        <p><strong>Employment Status:</strong> {{ selectedApplication.employment_status || 'None' }}</p>
-        <p><strong>Annual Income:</strong> {{ selectedApplication.annual_income || 'None' }}</p>
-        <p><strong>Background Check Status:</strong> {{ selectedApplication.background_check_status || 'None' }}</p>
-        <p><strong>Credit Report Status:</strong> {{ selectedApplication.credit_report_status || 'None' }}</p>
-        <p><strong>Status:</strong> {{ selectedApplication.status || 'None' }}</p>
-        <p><strong>Created At:</strong> {{ selectedApplication.created_at || 'None' }}</p>
-        <p><strong>Updated At:</strong> {{ selectedApplication.updated_at || 'None' }}</p>
-      </div>
-      <div class="flex justify-end mt-4 space-x-2">
-        <VaButton
-          color="success"
-          @click="confirmApprove(selectedApplication)"
-          v-if="selectedApplication?.status === 'pending'"
+      <div v-else-if="applications && applications.length > 0" class="table-responsive">
+        <VaDataTable
+          :key="componentKey"
+          :items="applications"
+          striped
+          :columns="columns"
+          :loading="loadingApplications"
+          :per-page="pagination.per_page"
+          :current-page="pagination.current_page"
+          @update:currentPage="handlePageChange"
         >
-          Approve
-        </VaButton>
-        <VaButton
-          color="danger"
-          @click="confirmReject(selectedApplication)"
-          v-if="selectedApplication?.status === 'pending'"
-        >
-          Reject
-        </VaButton>
-        <VaButton color="secondary" @click="closeView">Close</VaButton>
+          <template #cell(sn)="{ rowIndex }">
+            {{ (pagination.current_page - 1) * pagination.per_page + rowIndex + 1 }}
+          </template>
+          <template #cell(status)="{ rowData }">
+            <span class="status-badge">
+              {{ rowData.status }}
+            </span>
+          </template>
+          <template #cell(user_name)="{ rowData }">
+            {{ rowData.first_name && rowData.last_name ? `${rowData.first_name} ${rowData.last_name}` : rowData.user_name || 'Unknown User' }}
+          </template>
+          <template #cell(actions)="{ rowData }">
+            <div class="action-buttons">
+              <VaButton size="small" color="primary" icon="visibility" @click="openView(rowData)" aria-label="View application details" />
+              <VaButton
+                size="small"
+                color="success"
+                icon="check"
+                @click="confirmApprove(rowData)"
+                v-if="rowData.status === 'pending'"
+                aria-label="Approve application"
+              />
+              <VaButton
+                size="small"
+                color="danger"
+                icon="close"
+                @click="confirmReject(rowData)"
+                v-if="rowData.status === 'pending'"
+                aria-label="Reject application"
+              />
+            </div>
+          </template>
+        </VaDataTable>
       </div>
-    </VaModal>
+      <div v-if="applications && applications.length > 0" class="pagination-container">
+        <div class="pagination-info">
+          Showing {{ (pagination.current_page - 1) * pagination.per_page + 1 }} to
+          {{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} of
+          {{ pagination.total }} pending applications
+        </div>
+        <div class="pagination-buttons">
+          <VaButton
+            size="small"
+            :disabled="pagination.current_page === 1 || loadingApplications"
+            @click="handlePageChange(pagination.current_page - 1)"
+            aria-label="Go to previous page"
+          >
+            Previous
+          </VaButton>
+          <VaButton
+            v-for="page in paginationPages"
+            :key="page"
+            size="small"
+            :color="pagination.current_page === page ? '#00A3E0' : 'secondary'"
+            @click="handlePageChange(page)"
+            :aria-label="`Go to page ${page}`"
+          >
+            {{ page }}
+          </VaButton>
+          <VaButton
+            size="small"
+            :disabled="pagination.current_page === pagination.last_page || loadingApplications"
+            @click="handlePageChange(pagination.current_page + 1)"
+            aria-label="Go to next page"
+          >
+            Next
+          </VaButton>
+        </div>
+      </div>
+      <VaModal v-model="showView" :size="isMobile ? 'full' : 'medium'" layout="centered" close-button hide-default-actions class="modal-container">
+        <div class="modal-title">{{ $t('Pending Rental Application Details') }}</div>
+        <div v-if="selectedApplication" class="modal-content">
+          <p><strong>Property:</strong> {{ selectedApplication.property_title || 'None' }}</p>
+          <p><strong>User:</strong> {{ selectedApplication.first_name && selectedApplication.last_name ? `${selectedApplication.first_name} ${selectedApplication.last_name}` : selectedApplication.user_name || 'Unknown User' }}</p>
+          <p><strong>Branch:</strong> {{ selectedApplication.branch_name || 'None' }}</p>
+          <p><strong>NIDA Number:</strong> {{ selectedApplication.nida_number || 'None' }}</p>
+          <p><strong>Employment Status:</strong> {{ selectedApplication.employment_status || 'None' }}</p>
+          <p><strong>Annual Income:</strong> {{ selectedApplication.annual_income || 'None' }}</p>
+          <p><strong>Background Check Status:</strong> {{ selectedApplication.background_check_status || 'None' }}</p>
+          <p><strong>Credit Report Status:</strong> {{ selectedApplication.credit_report_status || 'None' }}</p>
+          <p><strong>Status:</strong> {{ selectedApplication.status || 'None' }}</p>
+          <p><strong>Created At:</strong> {{ selectedApplication.created_at || 'None' }}</p>
+          <p><strong>Updated At:</strong> {{ selectedApplication.updated_at || 'None' }}</p>
+        </div>
+        <div class="modal-footer">
+          <VaButton
+            color="success"
+            @click="confirmApprove(selectedApplication)"
+            v-if="selectedApplication?.status === 'pending'"
+            aria-label="Approve application"
+          >
+            Approve
+          </VaButton>
+          <VaButton
+            color="danger"
+            @click="confirmReject(selectedApplication)"
+            v-if="selectedApplication?.status === 'pending'"
+            aria-label="Reject application"
+          >
+            Reject
+          </VaButton>
+          <VaButton color="secondary" @click="closeView" aria-label="Close application details modal">Close</VaButton>
+        </div>
+      </VaModal>
+    </template>
   </div>
 </template>
-
 <script lang="ts">
-import { defineComponent, ref } from 'vue';
+import { defineComponent, ref, computed, onMounted } from 'vue';
 import Swal from 'sweetalert2';
 import { debounce } from 'lodash';
 import makeRequest from '../../../../services/makeRequest';
 import { format } from 'date-fns';
 import type { RentalApplication } from '../../../../types/rentalApplication';
-
 interface Pagination {
   total: number;
   per_page: number;
   current_page: number;
   last_page: number;
 }
-
 interface GetApplicationsParams {
   page?: number;
   per_page?: number;
   search?: string;
   status?: string;
 }
-
 export default defineComponent({
   name: 'PendingRentalApplicationList',
   setup() {
@@ -154,6 +200,7 @@ export default defineComponent({
       last_page: 1,
     });
     const loadingApplications = ref<boolean>(false);
+    const errorMessage = ref<string>('');
     const showView = ref<boolean>(false);
     const selectedApplication = ref<RentalApplication | null>(null);
     const componentKey = ref<number>(0);
@@ -163,43 +210,52 @@ export default defineComponent({
       { value: 20, text: '20' },
       { value: 50, text: '50' },
     ]);
-
-    return {
-      applications,
-      pagination,
-      loadingApplications,
-      showView,
-      selectedApplication,
-      componentKey,
-      searchQuery,
-      perPageOptions,
+    const columns = [
+      { key: 'sn', sortable: false, label: 'SN' },
+      { key: 'property_title', sortable: true, label: 'Property' },
+      { key: 'user_name', sortable: true, label: 'User' },
+      { key: 'nida_number', sortable: true, label: 'NIDA Number' },
+      { key: 'employment_status', sortable: true, label: 'Employment Status' },
+      { key: 'annual_income', sortable: true, label: 'Annual Income' },
+      { key: 'status', sortable: true, label: 'Status' },
+      { key: 'created_at', sortable: true, label: 'Created At' },
+      { key: 'actions', label: 'Actions', sortable: false },
+    ];
+    const paginationPages = computed(() => {
+      const pages: number[] = [];
+      const lastPage = pagination.value.last_page;
+      const current = pagination.value.current_page;
+      const range = 2;
+      pages.push(1);
+      if (current - range > 2) {
+        pages.push(current - range - 1);
+      }
+      for (let i = Math.max(2, current - range); i <= Math.min(lastPage - 1, current + range); i++) {
+        pages.push(i);
+      }
+      if (current + range < lastPage - 1) {
+        pages.push(current + range + 1);
+      }
+      if (lastPage > 1) {
+        pages.push(lastPage);
+      }
+      return pages;
+    });
+    const isMobile = computed(() => window.innerWidth < 768);
+    const debouncedSearch = debounce((value: string) => {
+      searchQuery.value = value;
+      handleSearch();
+    }, 500);
+    const retryFetch = () => {
+      errorMessage.value = '';
+      getApplications({ page: 1, per_page: pagination.value.per_page, status: 'pending' });
     };
-  },
-  data() {
-    return {
-      columns: [
-        { key: 'sn', sortable: false, label: 'SN' },
-        { key: 'property_title', sortable: true, label: 'Property' },
-        { key: 'user_name', sortable: true, label: 'User' },
-        { key: 'nida_number', sortable: true, label: 'NIDA Number' },
-        { key: 'employment_status', sortable: true, label: 'Employment Status' },
-        { key: 'annual_income', sortable: true, label: 'Annual Income' },
-        { key: 'status', sortable: true, label: 'Status' },
-        { key: 'created_at', sortable: true, label: 'Created At' },
-        { key: 'actions', label: 'Actions', sortable: false },
-      ],
-      debouncedSearch: null as unknown as ((this: any) => void), // Declare debouncedSearch
+    const clearSearch = () => {
+      searchQuery.value = '';
+      handleSearch();
     };
-  },
-  created() {
-    this.debouncedSearch = debounce(this.handleSearch, 500);
-  },
-  mounted() {
-    this.getApplications({ page: 1, per_page: this.pagination.per_page, status: 'pending' });
-  },
-  methods: {
-    async getApplications(params: GetApplicationsParams = {}) {
-      this.loadingApplications = true;
+    const getApplications = async (params: GetApplicationsParams = {}) => {
+      loadingApplications.value = true;
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/rental-applications`,
@@ -207,20 +263,19 @@ export default defineComponent({
           headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`, Accept: 'application/json' },
           params: {
             page: params.page || 1,
-            per_page: params.per_page || this.pagination.per_page,
+            per_page: params.per_page || pagination.value.per_page,
             search: params.search || '',
             status: 'pending',
           },
         });
         if (response.status === 200 && 'data' in response.data && 'pagination' in response.data) {
-          this.applications = response.data.data
+          applications.value = response.data.data
             .filter((application: any) => application && application.id && application.status === 'pending')
             .map((application: any) => {
               const validStatuses = ['pending', 'approved', 'rejected'] as const;
               const status: 'pending' | 'approved' | 'rejected' = validStatuses.includes(application.status)
                 ? application.status
                 : 'pending';
-
               return {
                 id: Number(application.id),
                 property_id: Number(application.property_id),
@@ -241,13 +296,13 @@ export default defineComponent({
                 updated_at: application.updated_at ? format(new Date(application.updated_at), 'd MMMM yyyy') : 'None',
               };
             });
-          this.pagination = {
-            total: response.data.pagination?.total || this.applications.length,
+          pagination.value = {
+            total: response.data.pagination?.total || applications.value.length,
             per_page: Number(response.data.pagination?.per_page) || params.per_page || 10,
             current_page: Number(response.data.pagination?.current_page) || params.page || 1,
-            last_page: Number(response.data.pagination?.last_page) || Math.ceil(this.applications.length / this.pagination.per_page),
+            last_page: Number(response.data.pagination?.last_page) || Math.ceil(applications.value.length / pagination.value.per_page),
           };
-          if (this.applications.length === 0) {
+          if (applications.value.length === 0) {
             Swal.fire({
               title: 'Info',
               text: 'No pending rental applications found.',
@@ -263,10 +318,10 @@ export default defineComponent({
         }
       } catch (error: any) {
         console.error('getApplications error:', error.message, error.response?.data);
-        const errorMessage = error.response?.data?.message || 'Failed to fetch pending rental applications.';
+        errorMessage.value = error.response?.data?.message || 'Failed to fetch pending rental applications.';
         Swal.fire({
           title: 'Error!',
-          text: errorMessage,
+          text: errorMessage.value,
           icon: 'error',
           position: 'top-end',
           toast: true,
@@ -274,10 +329,10 @@ export default defineComponent({
           timer: 3000,
         });
       } finally {
-        this.loadingApplications = false;
+        loadingApplications.value = false;
       }
-    },
-    async approveApplication(id: number) {
+    };
+    const approveApplication = async (id: number) => {
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/rental-applications/${id}`,
@@ -286,10 +341,10 @@ export default defineComponent({
           data: { status: 'approved' },
         });
         if (response.status === 200) {
-          await this.getApplications({
-            page: this.pagination.current_page,
-            per_page: this.pagination.per_page,
-            search: this.searchQuery,
+          await getApplications({
+            page: pagination.value.current_page,
+            per_page: pagination.value.per_page,
+            search: searchQuery.value,
             status: 'pending',
           });
           Swal.fire({
@@ -306,10 +361,10 @@ export default defineComponent({
         }
       } catch (error: any) {
         console.error('approveApplication error:', error.message, error.response?.data);
-        const errorMessage = error.response?.data?.message || 'Failed to approve rental application.';
+        const errMsg = error.response?.data?.message || 'Failed to approve rental application.';
         Swal.fire({
           title: 'Error!',
-          text: errorMessage,
+          text: errMsg,
           icon: 'error',
           position: 'top-end',
           toast: true,
@@ -318,8 +373,8 @@ export default defineComponent({
         });
         throw error;
       }
-    },
-    async rejectApplication(id: number) {
+    };
+    const rejectApplication = async (id: number) => {
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/rental-applications/${id}`,
@@ -328,10 +383,10 @@ export default defineComponent({
           data: { status: 'rejected' },
         });
         if (response.status === 200) {
-          await this.getApplications({
-            page: this.pagination.current_page,
-            per_page: this.pagination.per_page,
-            search: this.searchQuery,
+          await getApplications({
+            page: pagination.value.current_page,
+            per_page: pagination.value.per_page,
+            search: searchQuery.value,
             status: 'pending',
           });
           Swal.fire({
@@ -348,10 +403,10 @@ export default defineComponent({
         }
       } catch (error: any) {
         console.error('rejectApplication error:', error.message, error.response?.data);
-        const errorMessage = error.response?.data?.message || 'Failed to reject rental application.';
+        const errMsg = error.response?.data?.message || 'Failed to reject rental application.';
         Swal.fire({
           title: 'Error!',
-          text: errorMessage,
+          text: errMsg,
           icon: 'error',
           position: 'top-end',
           toast: true,
@@ -360,9 +415,9 @@ export default defineComponent({
         });
         throw error;
       }
-    },
-    confirmApprove(application: RentalApplication) {
-      this.selectedApplication = application;
+    };
+    const confirmApprove = (application: RentalApplication) => {
+      selectedApplication.value = application;
       if (application.status !== 'pending') {
         Swal.fire({
           title: 'Error!',
@@ -388,12 +443,12 @@ export default defineComponent({
         showConfirmButton: true,
       }).then((result) => {
         if (result.isConfirmed) {
-          this.handleApprove();
+          handleApprove();
         }
       });
-    },
-    confirmReject(application: RentalApplication) {
-      this.selectedApplication = application;
+    };
+    const confirmReject = (application: RentalApplication) => {
+      selectedApplication.value = application;
       if (application.status !== 'pending') {
         Swal.fire({
           title: 'Error!',
@@ -419,12 +474,12 @@ export default defineComponent({
         showConfirmButton: true,
       }).then((result) => {
         if (result.isConfirmed) {
-          this.handleReject();
+          handleReject();
         }
       });
-    },
-    async handleApprove() {
-      if (!this.selectedApplication?.id) {
+    };
+    const handleApprove = async () => {
+      if (!selectedApplication.value?.id) {
         Swal.fire({
           title: 'Error!',
           text: 'No application selected for approval.',
@@ -436,12 +491,12 @@ export default defineComponent({
         });
         return;
       }
-      await this.approveApplication(this.selectedApplication.id);
-      this.closeView();
-      this.componentKey += 1;
-    },
-    async handleReject() {
-      if (!this.selectedApplication?.id) {
+      await approveApplication(selectedApplication.value.id);
+      closeView();
+      componentKey.value += 1;
+    };
+    const handleReject = async () => {
+      if (!selectedApplication.value?.id) {
         Swal.fire({
           title: 'Error!',
           text: 'No application selected for rejection.',
@@ -453,93 +508,652 @@ export default defineComponent({
         });
         return;
       }
-      await this.rejectApplication(this.selectedApplication.id);
-      this.closeView();
-      this.componentKey += 1;
-    },
-    openView(application: RentalApplication) {
-      this.selectedApplication = application;
-      this.showView = true;
-    },
-    closeView() {
-      this.selectedApplication = null;
-      this.showView = false;
-    },
-    async handlePageChange(page: number) {
-      if (page < 1 || page > this.pagination.last_page || this.loadingApplications) return;
-      this.pagination.current_page = page;
-      await this.getApplications({
+      await rejectApplication(selectedApplication.value.id);
+      closeView();
+      componentKey.value += 1;
+    };
+    const openView = (application: RentalApplication) => {
+      selectedApplication.value = application;
+      showView.value = true;
+    };
+    const closeView = () => {
+      selectedApplication.value = null;
+      showView.value = false;
+    };
+    const handlePageChange = async (page: number) => {
+      if (page < 1 || page > pagination.value.last_page || loadingApplications.value) return;
+      pagination.value.current_page = page;
+      await getApplications({
         page,
-        per_page: this.pagination.per_page,
-        search: this.searchQuery,
+        per_page: pagination.value.per_page,
+        search: searchQuery.value,
         status: 'pending',
       });
-      this.componentKey += 1;
-    },
-    async handlePerPageChange() {
-      this.pagination.current_page = 1;
-      await this.getApplications({
+      componentKey.value += 1;
+    };
+    const handlePerPageChange = async () => {
+      pagination.value.current_page = 1;
+      await getApplications({
         page: 1,
-        per_page: this.pagination.per_page,
-        search: this.searchQuery,
+        per_page: pagination.value.per_page,
+        search: searchQuery.value,
         status: 'pending',
       });
-      this.componentKey += 1;
-    },
-    async handleSearch() {
-      this.pagination.current_page = 1;
-      await this.getApplications({
+      componentKey.value += 1;
+    };
+    const handleSearch = async () => {
+      pagination.value.current_page = 1;
+      await getApplications({
         page: 1,
-        per_page: this.pagination.per_page,
-        search: this.searchQuery,
+        per_page: pagination.value.per_page,
+        search: searchQuery.value,
         status: 'pending',
       });
-      this.componentKey += 1;
-    },
+      componentKey.value += 1;
+    };
+    onMounted(() => {
+      getApplications({ page: 1, per_page: pagination.value.per_page, status: 'pending' });
+    });
+    return {
+      applications,
+      pagination,
+      loadingApplications,
+      errorMessage,
+      showView,
+      selectedApplication,
+      componentKey,
+      searchQuery,
+      perPageOptions,
+      columns,
+      paginationPages,
+      isMobile,
+      debouncedSearch,
+      retryFetch,
+      clearSearch,
+      getApplications,
+      approveApplication,
+      rejectApplication,
+      confirmApprove,
+      confirmReject,
+      handleApprove,
+      handleReject,
+      openView,
+      closeView,
+      handlePageChange,
+      handlePerPageChange,
+      handleSearch,
+    };
   },
 });
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .bg-white {
   background-color: #ffffff;
 }
+
 .shadow-md {
   box-shadow:
     0 4px 6px -1px rgba(0, 0, 0, 0.1),
     0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
+
 .rounded-lg {
   border-radius: 0.5rem;
 }
-.p-6 {
-  padding: 1.5rem;
+
+.p-4 {
+  padding: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    padding: 1rem;
+  }
 }
-.mb-4 {
-  margin-bottom: 1rem;
-}
-.mt-4 {
-  margin-top: 1rem;
-}
-.flex {
+
+.loading-spinner {
   display: flex;
-}
-.justify-between {
-  justify-content: space-between;
-}
-.items-center {
+  justify-content: center;
   align-items: center;
+  min-height: 200px;
+
+  @media screen and (min-width: 768px) {
+    min-height: 400px;
+  }
 }
-.space-x-2 > :not(:last-child) {
-  margin-right: 0.5rem;
+
+.error-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  color: #ef4444;
+  font-size: 0.875rem;
+  text-align: center;
+
+  @media screen and (min-width: 768px) {
+    font-size: 1rem;
+    padding: 2rem;
+  }
+
+  .retry-button {
+    margin-top: 0.5rem;
+    color: #2563eb;
+    text-decoration: underline;
+    font-size: 0.875rem;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0.25rem 0.5rem;
+    min-height: 40px;
+
+    @media screen and (min-width: 768px) {
+      font-size: 1rem;
+    }
+  }
 }
-.space-x-4 > :not(:last-child) {
-  margin-right: 1rem;
+
+.controls-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
 }
-.w-64 {
-  width: 16rem;
+
+.search-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  @media screen and (min-width: 640px) {
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .search-input {
+    width: 100%;
+    max-width: 100%;
+    font-size: 0.875rem;
+
+    @media screen and (min-width: 640px) {
+      max-width: 16rem;
+    }
+
+    @media screen and (min-width: 768px) {
+      max-width: 20rem;
+    }
+  }
+
+  .va-button {
+    min-height: 40px;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+
+    @media screen and (min-width: 768px) {
+      font-size: 0.875rem;
+      padding: 0.5rem 1rem;
+    }
+  }
 }
-.w-24 {
-  width: 6rem;
+
+.per-page-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  .per-page-select {
+    width: 100%;
+    max-width: 6rem;
+    font-size: 0.875rem;
+
+    @media screen and (min-width: 768px) {
+      max-width: 8rem;
+      font-size: 1rem;
+    }
+  }
+}
+
+.no-data-message {
+  text-align: center;
+  padding: 1rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+
+  @media screen and (min-width: 768px) {
+    font-size: 1rem;
+    padding: 2rem;
+  }
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+
+  :deep(.va-data-table) {
+    min-width: 600px;
+  }
+
+  :deep(.va-data-table__table) {
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  :deep(.va-data-table__table-th) {
+    white-space: nowrap;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.5rem;
+    background-color: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    color: #374151;
+
+    @media screen and (min-width: 768px) {
+      font-size: 0.875rem;
+      padding: 0.875rem 0.75rem;
+    }
+  }
+
+  :deep(.va-data-table__table-td) {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+
+    @media screen and (min-width: 768px) {
+      font-size: 0.875rem;
+      padding: 0.875rem 0.75rem;
+    }
+  }
+
+  :deep(.va-data-table__table-tr:hover) {
+    background-color: #f8fafc;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background-color: #fef9c3;
+    color: #854d0e;
+
+    @media screen and (min-width: 768px) {
+      font-size: 0.875rem;
+    }
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 0.25rem;
+
+    @media screen and (min-width: 768px) {
+      gap: 0.5rem;
+    }
+
+    .va-button {
+      min-height: 40px;
+      font-size: 0.75rem;
+      padding: 0.25rem;
+
+      @media screen and (min-width: 768px) {
+        font-size: 0.875rem;
+        padding: 0.5rem;
+      }
+    }
+  }
+}
+
+.pagination-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .pagination-info {
+    font-size: 0.75rem;
+    color: #6b7280;
+
+    @media screen and (min-width: 768px) {
+      font-size: 0.875rem;
+    }
+  }
+
+  .pagination-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+
+    @media screen and (min-width: 768px) {
+      gap: 0.5rem;
+    }
+
+    .va-button {
+      min-height: 40px;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+
+      @media screen and (min-width: 768px) {
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+      }
+    }
+  }
+}
+
+.modal-container {
+  padding: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    padding: 1rem;
+  }
+
+  .modal-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 0.75rem;
+
+    @media screen and (min-width: 768px) {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+  }
+
+  .modal-content {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+    font-size: 0.875rem;
+
+    @media screen and (min-width: 768px) {
+      max-height: 70vh;
+      padding-right: 1rem;
+      font-size: 1rem;
+    }
+
+    p {
+      margin: 0.5rem 0;
+
+      @media screen and (min-width: 768px) {
+        margin: 1rem 0;
+      }
+    }
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+
+    @media screen and (min-width: 768px) {
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .va-button {
+      min-height: 40px;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+
+      @media screen and (min-width: 768px) {
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+      }
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .p-4 {
+    padding: 0.5rem;
+  }
+
+  .controls-container {
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .search-container {
+    .search-input {
+      font-size: 0.75rem;
+      max-width: 100%;
+    }
+
+    .va-button {
+      font-size: 0.625rem;
+      padding: 0.25rem 0.5rem;
+    }
+  }
+
+  .per-page-container {
+    .per-page-select {
+      font-size: 0.75rem;
+      max-width: 5rem;
+    }
+  }
+
+  .no-data-message {
+    font-size: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .table-responsive {
+    :deep(.va-data-table) {
+      min-width: 400px;
+    }
+
+    :deep(.va-data-table__table-th),
+    :deep(.va-data-table__table-td) {
+      font-size: 0.625rem;
+      padding: 0.25rem;
+    }
+
+    :deep(.va-data-table__table-th[data-key="nida_number"]),
+    :deep(.va-data-table__table-td[data-key="nida_number"]),
+    :deep(.va-data-table__table-th[data-key="employment_status"]),
+    :deep(.va-data-table__table-td[data-key="employment_status"]),
+    :deep(.va-data-table__table-th[data-key="annual_income"]),
+    :deep(.va-data-table__table-td[data-key="annual_income"]),
+    :deep(.va-data-table__table-th[data-key="created_at"]),
+    :deep(.va-data-table__table-td[data-key="created_at"]) {
+      display: none; /* Hide less critical columns on mobile */
+    }
+
+    :deep(.va-data-table__table-th[data-key="sn"]),
+    :deep(.va-data-table__table-td[data-key="sn"]) {
+      min-width: 40px;
+    }
+
+    :deep(.va-data-table__table-th[data-key="property_title"]),
+    :deep(.va-data-table__table-td[data-key="property_title"]) {
+      min-width: 120px;
+    }
+
+    :deep(.va-data-table__table-th[data-key="user_name"]),
+    :deep(.va-data-table__table-td[data-key="user_name"]) {
+      min-width: 100px;
+    }
+
+    :deep(.va-data-table__table-th[data-key="status"]),
+    :deep(.va-data-table__table-td[data-key="status"]) {
+      min-width: 80px;
+    }
+
+    :deep(.va-data-table__table-th[data-key="actions"]),
+    :deep(.va-data-table__table-td[data-key="actions"]) {
+      min-width: 80px;
+    }
+
+    .status-badge {
+      font-size: 0.625rem;
+      padding: 0.2rem 0.4rem;
+    }
+
+    .action-buttons {
+      gap: 0.2rem;
+
+      .va-button {
+        font-size: 0.625rem;
+        padding: 0.2rem;
+      }
+    }
+  }
+
+  .pagination-container {
+    gap: 0.25rem;
+
+    .pagination-info {
+      font-size: 0.625rem;
+    }
+
+    .pagination-buttons {
+      .va-button {
+        font-size: 0.625rem;
+        padding: 0.25rem 0.5rem;
+        min-width: 40px;
+      }
+    }
+  }
+
+  .modal-container {
+    padding: 0.5rem;
+
+    .modal-title {
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .modal-content {
+      max-height: 50vh;
+      font-size: 0.75rem;
+
+      p {
+        margin: 0.25rem 0;
+      }
+    }
+
+    .modal-footer {
+      margin-top: 0.5rem;
+
+      .va-button {
+        font-size: 0.625rem;
+        padding: 0.25rem 0.5rem;
+      }
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .p-4 {
+    padding: 0.25rem;
+  }
+
+  .controls-container {
+    gap: 0.125rem;
+  }
+
+  .search-container {
+    .search-input {
+      font-size: 0.625rem;
+    }
+
+    .va-button {
+      font-size: 0.5rem;
+      padding: 0.2rem 0.4rem;
+    }
+  }
+
+  .per-page-container {
+    .per-page-select {
+      font-size: 0.625rem;
+      max-width: 4rem;
+    }
+  }
+
+  .no-data-message {
+    font-size: 0.625rem;
+    padding: 0.5rem;
+  }
+
+  .error-message {
+    font-size: 0.75rem;
+    padding: 0.75rem;
+
+    .retry-button {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.4rem;
+    }
+  }
+
+  .table-responsive {
+    :deep(.va-data-table) {
+      min-width: 300px;
+    }
+
+    :deep(.va-data-table__table-th),
+    :deep(.va-data-table__table-td) {
+      font-size: 0.5rem;
+      padding: 0.2rem;
+    }
+
+    .status-badge {
+      font-size: 0.5rem;
+      padding: 0.15rem 0.3rem;
+    }
+
+    .action-buttons {
+      .va-button {
+        font-size: 0.5rem;
+        padding: 0.15rem;
+      }
+    }
+  }
+
+  .pagination-container {
+    .pagination-info {
+      font-size: 0.5rem;
+    }
+
+    .pagination-buttons {
+      .va-button {
+        font-size: 0.5rem;
+        padding: 0.2rem 0.4rem;
+        min-width: 36px;
+      }
+    }
+  }
+
+  .modal-container {
+    padding: 0.25rem;
+
+    .modal-title {
+      font-size: 0.875rem;
+    }
+
+    .modal-content {
+      max-height: 40vh;
+      font-size: 0.625rem;
+    }
+  }
 }
 </style>

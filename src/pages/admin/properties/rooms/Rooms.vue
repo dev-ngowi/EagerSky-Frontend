@@ -1,50 +1,51 @@
 <template>
-  <div class="bg-white shadow-md rounded-lg p-6">
-    <div class="flex justify-between items-center mb-4">
-      <div class="flex items-center space-x-4">
-        <VaInput
-          v-if="!addEditForm"
-          v-model="searchQuery"
-          placeholder="Search by room number, property or category..."
-          class="w-64"
-          :disabled="loadingRooms"
-          @input="debouncedSearch"
-        />
-        <VaButton 
-          v-if="searchQuery && !addEditForm" 
-          color="warning" 
-          size="small" 
-          @click="clearSearch"
-        >
-          Clear Search
-        </VaButton>
+  <div class="container">
+    <div v-if="!addEditForm">
+      <div class="controls-container">
+        <div class="search-filter-group">
+          <VaInput
+            v-model="searchQuery"
+            placeholder="Search by room number, property or category..."
+            class="search-input"
+            :disabled="loadingRooms"
+            @input="debouncedSearch"
+            aria-label="Search rooms by number, property, or category"
+          />
+          <VaButton
+            v-if="searchQuery"
+            color="warning"
+            size="small"
+            class="clear-button"
+            @click="clearSearch"
+            aria-label="Clear search"
+          >
+            Clear Search
+          </VaButton>
+        </div>
+        <div class="action-group">
+          <VaButton
+            icon="add"
+            color="#00A3E0"
+            size="small"
+            class="action-button"
+            @click="openForm(null, 'add')"
+            aria-label="Add new room"
+          >
+            Add
+          </VaButton>
+        </div>
       </div>
-      <div class="flex items-center space-x-4">
-        <VaButton v-if="addEditForm" icon="close" color="success" size="small" class="px-4" @click="cancelAdding">
-          Done
-        </VaButton>
-        <VaButton
-          v-if="!addEditForm"
-          icon="add"
-          :color="'#00A3E0'"
-          size="small"
-          class="px-4"
-          @click="openForm(null, 'add')"
-        >
-          Add
-        </VaButton>
+      <div v-if="!loadingRooms && (!rooms || rooms.length === 0)" class="no-data">
+        {{ searchQuery ? 'No rooms found matching your search criteria.' : 'No rooms found.' }}
       </div>
-    </div>
-    <div v-if="!loadingRooms && (!rooms || rooms.length === 0)" class="text-center py-4">
-      {{ searchQuery ? 'No rooms found matching your search criteria.' : 'No rooms found.' }}
-    </div>
-    <template v-if="!addEditForm">
       <VaDataTable
+        v-if="rooms && rooms.length > 0"
         :key="componentKey"
         :items="rooms"
         :columns="columns"
         :loading="loadingRooms"
         striped
+        class="data-table"
       >
         <template #cell(sn)="{ rowIndex }">
           {{ (pagination.current_page - 1) * pagination.per_page + rowIndex + 1 }}
@@ -56,33 +57,55 @@
           {{ rowData.room_category_name || 'N/A' }}
         </template>
         <template #cell(actions)="{ rowData }">
-          <VaButton size="small" color="primary" icon="visibility" @click="openView(rowData)" />
-          <VaButton size="small" color="warning" icon="edit" class="ml-2" @click="openForm(rowData, 'edit')" />
-          <VaButton size="small" color="danger" icon="delete" class="ml-2" @click="confirmDelete(rowData)" />
+          <VaButton
+            size="small"
+            color="primary"
+            icon="visibility"
+            class="action-button"
+            @click="openView(rowData)"
+            :aria-label="`View details for room ${rowData.room_number}`"
+          />
+          <VaButton
+            size="small"
+            color="warning"
+            icon="edit"
+            class="action-button"
+            @click="openForm(rowData, 'edit')"
+            :aria-label="`Edit room ${rowData.room_number}`"
+          />
+          <VaButton
+            size="small"
+            color="danger"
+            icon="delete"
+            class="action-button"
+            @click="confirmDelete(rowData)"
+            :aria-label="`Delete room ${rowData.room_number}`"
+          />
         </template>
       </VaDataTable>
-      
-      <!-- Updated Pagination Section -->
-      <div v-if="rooms && rooms.length > 0" class="flex justify-between items-center mt-4">
-        <div class="flex items-center space-x-4">
+      <div v-if="rooms && rooms.length > 0" class="pagination-container">
+        <div class="pagination-info-group">
           <VaSelect
             v-model="pagination.per_page"
             :options="perPageOptions"
             label="Items per page"
             value-by="value"
             text-by="text"
-            class="w-32"
+            class="per-page-select"
             @update:modelValue="handlePerPageChange"
+            aria-label="Select items per page"
           />
-          <div class="text-sm text-gray-600">
+          <div class="pagination-info">
             Showing {{ pagination.from }} to {{ pagination.to }} of {{ pagination.total }} rooms
           </div>
         </div>
-        <div class="flex space-x-2">
+        <div class="pagination-buttons">
           <VaButton
             size="small"
             :disabled="pagination.current_page === 1"
             @click="handlePageChange(pagination.current_page - 1)"
+            class="pagination-button"
+            aria-label="Go to previous page"
           >
             Previous
           </VaButton>
@@ -92,6 +115,8 @@
             size="small"
             :color="pagination.current_page === page ? '#00A3E0' : 'secondary'"
             @click="handlePageChange(page)"
+            class="pagination-button"
+            :aria-label="`Go to page ${page}`"
           >
             {{ page }}
           </VaButton>
@@ -99,21 +124,44 @@
             size="small"
             :disabled="pagination.current_page === pagination.last_page"
             @click="handlePageChange(pagination.current_page + 1)"
+            class="pagination-button"
+            aria-label="Go to next page"
           >
             Next
           </VaButton>
         </div>
       </div>
-    </template>
-    <template v-else>
+    </div>
+    <template v-if="addEditForm">
       <RoomForm v-if="formMode === 'add'" @close="closeForm" @submit="handleRoomFormSubmit" />
-      <RoomEdit v-if="formMode === 'edit' && selectedRoom" :room="selectedRoom" @close="closeForm" @submit="debouncedHandleSubmit" />
+      <RoomEdit
+        v-if="formMode === 'edit' && selectedRoom"
+        :room="selectedRoom"
+        @close="closeForm"
+        @submit="debouncedHandleSubmit"
+      />
+      <VaButton
+        icon="close"
+        color="success"
+        size="small"
+        class="action-button done-button"
+        @click="cancelAdding"
+        aria-label="Finish adding or editing room"
+      >
+        Done
+      </VaButton>
     </template>
-
     <!-- View Modal -->
-    <VaModal v-model="showView" size="medium" layout="centered" close-button hide-default-actions class="p-4">
-      <div class="text-lg font-bold mb-4">{{ $t('Room Details') }}</div>
-      <div v-if="selectedRoom" class="space-y-2">
+    <VaModal
+      v-model="showView"
+      size="medium"
+      layout="centered"
+      close-button
+      hide-default-actions
+      class="modal"
+    >
+      <div class="modal-title">{{ $t('Room Details') }}</div>
+      <div v-if="selectedRoom" class="modal-content">
         <p><strong>Property ID:</strong> {{ selectedRoom.property_id }}</p>
         <p><strong>Property Title:</strong> {{ selectedRoom.property_title || 'N/A' }}</p>
         <p><strong>Room Category:</strong> {{ selectedRoom.room_category_name || 'N/A' }}</p>
@@ -121,13 +169,23 @@
         <p><strong>Size (sq m):</strong> {{ selectedRoom.size }}</p>
         <p><strong>Rent (TZS):</strong> {{ selectedRoom.rent }}</p>
         <p><strong>Available:</strong> {{ selectedRoom.is_available ? 'Yes' : 'No' }}</p>
-        <p><strong>Features:</strong> {{ selectedRoom.features?.length ? selectedRoom.features.map(f => f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ') : 'N/A' }}</p>
+        <p>
+          <strong>Features:</strong>
+          {{ selectedRoom.features?.length ? selectedRoom.features.map(f => f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ') : 'N/A' }}
+        </p>
         <p><strong>Description:</strong> {{ selectedRoom.description || 'N/A' }}</p>
         <p><strong>Created At:</strong> {{ selectedRoom.created_at }}</p>
         <p><strong>Updated At:</strong> {{ selectedRoom.updated_at }}</p>
       </div>
-      <div class="flex justify-end mt-4">
-        <VaButton color="secondary" @click="closeView">Close</VaButton>
+      <div class="modal-actions">
+        <VaButton
+          color="secondary"
+          @click="closeView"
+          class="modal-close-button"
+          aria-label="Close room details"
+        >
+          Close
+        </VaButton>
       </div>
     </VaModal>
   </div>
@@ -619,91 +677,434 @@ export default defineComponent({
 });
 </script>
 
-<style scoped>
-.bg-white {
+<style lang="scss" scoped>
+.container {
   background-color: #ffffff;
-}
-.shadow-md {
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-.rounded-lg {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   border-radius: 0.5rem;
-}
-.p-6 {
-  padding: 1.5rem;
-}
-.mb-4 {
-  margin-bottom: 1rem;
-}
-.mt-4 {
-  margin-top: 1rem;
-}
-.flex {
-  display: flex;
-  flex-wrap: wrap;
-}
-.justify-between {
-  justify-content: space-between;
-}
-.justify-end {
-  justify-content: flex-end;
-}
-.items-center {
-  align-items: center;
-}
-.space-x-2 > :not(:last-child) {
-  margin-right: 0.5rem;
-}
-.space-x-4 > :not(:last-child) {
-  margin-right: 1rem;
-}
-.w-32 {
-  width: 8rem;
-}
-.text-sm {
-  font-size: 0.875rem;
-}
-.text-gray-600 {
-  color: #6b7280;
-}
-.va-data-table__table-td,
-.va-data-table__table-th {
-  padding: 0.75rem 1rem !important;
-}
-.va-data-table__table-tr {
-  border-bottom: 1px solid #e5e7eb;
-}
-.va-data-table__table {
-  border-collapse: separate;
-  border-spacing: 0;
+  padding: 0.75rem;
+  max-width: 100%;
+  overflow-x: auto;
+
+  @media screen and (min-width: 768px) {
+    padding: 1.5rem;
+  }
 }
 
-/* Media Queries for Responsive Design */
-@media (max-width: 768px) {
-  .flex {
-    flex-direction: column;
+.controls-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+}
+
+.search-filter-group,
+.action-group,
+.pagination-info-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+  }
+}
+
+.search-input,
+.per-page-select {
+  font-size: 0.875rem;
+
+  :deep(.va-input__label),
+  :deep(.va-select__label) {
+    font-size: 0.875rem;
+    color: #374151;
+    margin-bottom: 0.25rem;
+  }
+
+  :deep(.va-input__input),
+  :deep(.va-select__input) {
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+  }
+
+  :deep(.va-input__error-message),
+  :deep(.va-select__error-message) {
+    font-size: 0.75rem;
+    color: #ef4444;
+    margin-top: 0.25rem;
+  }
+
+  @media screen and (min-width: 768px) {
+    font-size: 1rem;
+
+    :deep(.va-input__label),
+    :deep(.va-select__label) {
+      font-size: 1rem;
+    }
+
+    :deep(.va-input__input),
+    :deep(.va-select__input) {
+      padding: 0.75rem;
+    }
+
+    :deep(.va-input__error-message),
+    :deep(.va-select__error-message) {
+      font-size: 0.875rem;
+    }
+  }
+}
+
+.search-input {
+  width: 100%;
+  max-width: 16rem;
+}
+
+.per-page-select {
+  width: 100%;
+  max-width: 8rem;
+}
+
+.clear-button,
+.action-button,
+.pagination-button,
+.modal-close-button,
+.done-button {
+  min-height: 40px;
+  min-width: 40px;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+  }
+}
+
+.no-data {
+  text-align: center;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+
+  @media screen and (min-width: 768px) {
+    padding: 1rem;
+    font-size: 1rem;
+  }
+}
+
+.data-table {
+  width: 100%;
+  overflow-x: auto;
+
+  :deep(.va-data-table__table) {
+    min-width: 36rem;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  :deep(.va-data-table__table-th) {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+    border-bottom: 1px solid #e5e7eb;
+
+    @media screen and (min-width: 768px) {
+      font-size: 0.875rem;
+      padding: 0.75rem;
+    }
+  }
+
+  :deep(.va-data-table__table-td) {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+    border-bottom: 1px solid #e5e7eb;
+
+    @media screen and (min-width: 768px) {
+      font-size: 0.875rem;
+      padding: 0.75rem;
+    }
+  }
+
+  :deep(.va-data-table__table-tr) {
+    border-bottom: 1px solid #e5e7eb;
+  }
+}
+
+.pagination-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
+}
+
+.pagination-info-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+  }
+}
+
+.pagination-info {
+  font-size: 0.75rem;
+  color: #4b5563;
+
+  @media screen and (min-width: 768px) {
+    font-size: 0.875rem;
+  }
+}
+
+.pagination-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+
+  @media screen and (min-width: 768px) {
     gap: 0.5rem;
   }
-  
-  .justify-between {
-    justify-content: flex-start;
+}
+
+.modal {
+  padding: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    padding: 1rem;
   }
-  
-  .w-64 {
-    width: 100%;
+}
+
+.modal-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: #374151;
+
+  @media screen and (min-width: 768px) {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+  }
+}
+
+.modal-content {
+  font-size: 0.875rem;
+  color: #4b5563;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  @media screen and (min-width: 768px) {
+    font-size: 1rem;
+    gap: 0.5rem;
+  }
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    margin-top: 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 0.5rem;
+  }
+
+  .controls-container {
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .search-filter-group,
+  .action-group,
+  .pagination-info-group {
+    gap: 0.25rem;
+  }
+
+  .search-input,
+  .per-page-select {
+    font-size: 0.75rem;
     max-width: 100%;
+
+    :deep(.va-input__label),
+    :deep(.va-select__label) {
+      font-size: 0.75rem;
+    }
+
+    :deep(.va-input__input),
+    :deep(.va-select__input) {
+      padding: 0.375rem;
+    }
+
+    :deep(.va-input__error-message),
+    :deep(.va-select__error-message) {
+      font-size: 0.625rem;
+    }
   }
-  
-  .space-x-4 > :not(:last-child) {
-    margin-right: 0;
+
+  .clear-button,
+  .action-button,
+  .pagination-button,
+  .modal-close-button,
+  .done-button {
+    font-size: 0.625rem;
+    padding: 0.25rem 0.5rem;
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  .no-data {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+  }
+
+  .data-table {
+    :deep(.va-data-table__table-th),
+    :deep(.va-data-table__table-td) {
+      font-size: 0.625rem;
+      padding: 0.375rem;
+    }
+  }
+
+  .pagination-container {
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+  }
+
+  .pagination-info {
+    font-size: 0.625rem;
+  }
+
+  .pagination-buttons {
+    gap: 0.125rem;
+  }
+
+  .modal {
+    padding: 0.5rem;
+  }
+
+  .modal-title {
+    font-size: 1rem;
     margin-bottom: 0.5rem;
   }
-  
-  .space-x-2 > :not(:last-child) {
-    margin-right: 0;
-    margin-bottom: 0.5rem;
+
+  .modal-content {
+    font-size: 0.75rem;
+    gap: 0.125rem;
+  }
+
+  .modal-actions {
+    margin-top: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0.25rem;
+  }
+
+  .controls-container {
+    gap: 0.125rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .search-filter-group,
+  .action-group,
+  .pagination-info-group {
+    gap: 0.125rem;
+  }
+
+  .search-input,
+  .per-page-select {
+    font-size: 0.625rem;
+
+    :deep(.va-input__label),
+    :deep(.va-select__label) {
+      font-size: 0.625rem;
+    }
+
+    :deep(.va-input__input),
+    :deep(.va-select__input) {
+      padding: 0.25rem;
+    }
+
+    :deep(.va-input__error-message),
+    :deep(.va-select__error-message) {
+      font-size: 0.5rem;
+    }
+  }
+
+  .clear-button,
+  .action-button,
+  .pagination-button,
+  .modal-close-button,
+  .done-button {
+    font-size: 0.5rem;
+    padding: 0.2rem 0.4rem;
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  .no-data {
+    font-size: 0.625rem;
+    padding: 0.25rem;
+  }
+
+  .data-table {
+    :deep(.va-data-table__table-th),
+    :deep(.va-data-table__table-td) {
+      font-size: 0.5rem;
+      padding: 0.25rem;
+    }
+  }
+
+  .pagination-container {
+    gap: 0.125rem;
+    margin-top: 0.25rem;
+  }
+
+  .pagination-info {
+    font-size: 0.5rem;
+  }
+
+  .modal {
+    padding: 0.25rem;
+  }
+
+  .modal-title {
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .modal-content {
+    font-size: 0.625rem;
+  }
+
+  .modal-actions {
+    margin-top: 0.25rem;
   }
 }
 </style>

@@ -1,14 +1,14 @@
 <template>
-  <div class="card">
+  <div class="bg-white shadow-md rounded-lg p-4">
     <h2 class="text-xl font-bold mb-4">Role Assignment</h2>
     
     <!-- Search and Per Page Controls -->
-    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 gap-4">
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 w-full lg:w-auto">
         <VaInput
           v-model="searchQuery"
           placeholder="Search by username, email or name..."
-          class="w-full sm:w-80"
+          class="w-full sm:w-64"
           :disabled="loadingUsers"
           @input="handleSearchInput"
           clearable
@@ -31,20 +31,19 @@
           label="Items per page"
           value-by="value"
           text-by="text"
-          class="w-full sm:w-40"
+          class="w-full sm:w-32"
           @update:modelValue="handlePerPageChange"
         />
       </div>
     </div>
 
     <!-- Loading State -->
-    <div v-if="loadingUsers" class="text-center py-8">
-      <VaProgressCircle indeterminate />
-      <p class="mt-3 text-gray-600">Loading users...</p>
+    <div v-if="loadingUsers" class="loadingSpiner">
+      <Loader :loading-text="'Loading users...'" />
     </div>
 
     <!-- No Users Found -->
-    <div v-else-if="!users || users.length === 0" class="text-center py-8">
+    <div v-else-if="!users || users.length === 0" class="text-center py-4">
       <div class="text-gray-500">
         <i class="fas fa-users text-4xl mb-3"></i>
         <p class="text-lg">{{ searchQuery ? 'No users found matching your search.' : 'No users found.' }}</p>
@@ -124,12 +123,12 @@
     </div>
 
     <!-- Pagination -->
-    <div v-if="users && users.length > 0" class="flex flex-col sm:flex-row justify-between items-center mt-6 gap-4">
+    <div v-if="users && users.length > 0" class="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
       <div class="text-sm text-gray-600 order-2 sm:order-1">
         Showing {{ pagination.from || 0 }} to {{ pagination.to || 0 }} of {{ pagination.total || 0 }} users
       </div>
       
-      <div class="flex flex-wrap justify-center gap-1 order-1 sm:order-2">
+      <div class="flex flex-wrap justify-center gap-2 order-1 sm:order-2">
         <VaButton
           size="small"
           :disabled="pagination.current_page === 1"
@@ -144,7 +143,7 @@
           v-for="page in paginationPages"
           :key="page"
           size="small"
-          :color="pagination.current_page === page ? 'primary' : 'secondary'"
+          :color="pagination.current_page === page ? '#00A3E0' : 'secondary'"
           @click="handlePageChange(page)"
           class="pagination-btn"
           :class="{ 'current-page': pagination.current_page === page }"
@@ -532,15 +531,65 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.card {
+.bg-white {
   background-color: #ffffff;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
+}
+.shadow-md {
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+.p-4 {
+  padding: 1rem;
+}
+.mb-4 {
+  margin-bottom: 1rem;
+}
+.mt-4 {
+  margin-top: 1rem;
+}
+.loadingSpiner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+
+:deep(.va-data-table) {
   width: 100%;
   max-width: 100%;
-  box-sizing: border-box;
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+:deep(.va-data-table__table) {
+  min-width: 100%;
+  table-layout: auto;
+}
+
+:deep(.va-data-table__table-th) {
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.875rem 0.75rem;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  color: #374151;
+}
+
+:deep(.va-data-table__table-td) {
+  font-size: 0.875rem;
+  padding: 0.875rem 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+:deep(.va-data-table__table-tr:hover) {
+  background-color: #f8fafc;
 }
 
 .role-badge {
@@ -564,115 +613,51 @@ export default defineComponent({
   transform: scale(1.05);
 }
 
-.data-table {
-  border-radius: 0.5rem;
-  overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-/* Enhanced responsive styles */
-:deep(.va-data-table) {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-:deep(.va-data-table__table) {
-  min-width: 100%;
-  table-layout: auto;
-}
-
-:deep(.va-data-table__table-th) {
-  white-space: nowrap;
-  font-size: 0.875rem;
-  font-weight: 600;
-  padding: 1rem 0.75rem;
-  background-color: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
-  color: #374151;
-}
-
-:deep(.va-data-table__table-td) {
-  font-size: 0.875rem;
-  padding: 0.875rem 0.75rem;
-  border-bottom: 1px solid #f1f5f9;
-  vertical-align: middle;
-}
-
-:deep(.va-data-table__table-tr:hover) {
-  background-color: #f8fafc;
-}
-
-:deep(.va-progress-circle) {
-  margin: 1rem auto;
-}
-
 /* Mobile optimizations */
 @media (max-width: 768px) {
-  .card {
+  .p-4 {
     padding: 1rem;
-    border-radius: 0.5rem;
   }
-
   .role-select {
     min-width: 120px;
     font-size: 0.8rem;
   }
-
   :deep(.va-data-table__table-th),
   :deep(.va-data-table__table-td) {
     font-size: 0.8125rem;
     padding: 0.75rem 0.5rem;
   }
-
   .pagination-btn {
     min-width: 32px;
     height: 32px;
     font-size: 0.875rem;
   }
-
   .role-badge {
     font-size: 0.6875rem;
   }
 }
 
 @media (max-width: 480px) {
-  .card {
+  .p-4 {
     padding: 0.75rem;
-    margin: 0.5rem;
   }
-
   :deep(.va-data-table__table-th),
   :deep(.va-data-table__table-td) {
     font-size: 0.75rem;
     padding: 0.5rem 0.375rem;
   }
-
   .pagination-btn {
     min-width: 28px;
     height: 28px;
     font-size: 0.75rem;
   }
-
   :deep(.va-select),
   :deep(.va-input) {
     font-size: 0.875rem;
   }
-
   .role-badge {
     font-size: 0.625rem;
     padding: 0.125rem 0.375rem;
   }
-}
-
-/* Loading animation */
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.loading-row {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 </style>

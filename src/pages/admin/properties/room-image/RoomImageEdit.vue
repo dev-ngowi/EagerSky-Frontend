@@ -1,7 +1,7 @@
 <template>
   <div class="p-6 bg-white shadow-md rounded-lg">
     <h2 class="text-2xl font-bold mb-6 text-gray-800">Manage Images for Room {{ roomNumber }}</h2>
-    
+   
     <form @submit.prevent="submitForm">
       <!-- Property and Room Info -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -18,7 +18,6 @@
           class="w-full"
         />
       </div>
-
       <!-- Current Images -->
       <div class="mb-6">
         <p class="text-lg font-medium text-gray-700 mb-2">
@@ -74,7 +73,6 @@
         </div>
         <p v-else class="text-gray-500 text-sm">No images for this room.</p>
       </div>
-
       <!-- New/Replace Images -->
       <div class="mb-6">
         <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -85,12 +83,12 @@
           ref="fileInput"
           :multiple="!replaceImageId"
           :accept="requirements.allowed_formats.map((fmt) => `image/${fmt}`).join(',')"
-          :disabled="isSubmitting || (!replaceImageId && currentImages.length >= requirements.max_images_per_room)"
+          :disabled="isSubmitting || (!replaceImageId && currentImages.length - imagesToDelete.length >= requirements.max_images_per_room)"
           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
           @change="handleFileChange"
         />
         <p v-if="errors.images" class="text-red-500 text-sm mt-1">{{ errors.images }}</p>
-        <p v-if="!replaceImageId && currentImages.length >= requirements.max_images_per_room" class="text-red-500 text-sm mt-1">
+        <p v-if="!replaceImageId && currentImages.length - imagesToDelete.length >= requirements.max_images_per_room" class="text-red-500 text-sm mt-1">
           Maximum number of images reached. To add a new one, please delete or replace an existing image.
         </p>
         <div v-if="!replaceImageId" class="mt-4">
@@ -123,7 +121,16 @@
           </div>
         </div>
       </div>
-
+      <!-- Progress Bar -->
+      <div v-if="isSubmitting && uploadProgress > 0" class="mb-6">
+        <p class="text-sm text-gray-600">Uploading: {{ uploadProgress }}%</p>
+        <div class="w-full bg-gray-200 rounded-full h-2.5">
+          <div
+            class="bg-blue-600 h-2.5 rounded-full"
+            :style="{ width: `${uploadProgress}%` }"
+          ></div>
+        </div>
+      </div>
       <!-- Form Actions -->
       <div class="flex justify-end space-x-3 mt-6">
         <VaButton color="secondary" :disabled="isSubmitting" @click="$emit('close')">Cancel</VaButton>
@@ -139,7 +146,6 @@
     </form>
   </div>
 </template>
-
 <script lang="ts">
 import { defineComponent, PropType, ref } from 'vue';
 import { cloneDeep } from 'lodash';
@@ -149,7 +155,9 @@ import { useRouter } from 'vue-router';
 import { format } from 'date-fns';
 import { useAuthStore } from '../../../../stores/auth-store';
 import { AuthMiddleware } from '../../../../utils/authMiddleware';
-
+import Compressor from 'compressorjs';
+import { v4 as uuidv4 } from 'uuid';
+import { AxiosProgressEvent } from 'axios';
 // Interfaces
 interface Image {
   id: number;
@@ -162,27 +170,24 @@ interface Image {
   updated_at?: string;
   user_id?: string;
 }
-
 interface Requirements {
   allowed_formats: string[];
   max_size: string;
+  max_size_bytes: number;
   max_images_per_room: number;
   min_images_per_room: number;
   caption_max_length: number;
   notes: string[];
 }
-
 interface Errors {
   images: string;
   newImageCaption: string;
   [key: string]: string;
 }
-
 interface ImagePreview {
   url: string;
   file: File;
 }
-
 export default defineComponent({
   name: 'RoomImageEdit',
   props: {
@@ -204,10 +209,10 @@ export default defineComponent({
     },
     initialImages: {
       type: Array as PropType<Image[]>,
-      required: true,
+      required: false,
       default: () => [],
       validator: (images: Image[]) => {
-        return images.every(img => 
+        return images.every(img =>
           typeof img.id === 'number' &&
           typeof img.property_id === 'number' &&
           typeof img.room_id === 'number' &&
@@ -219,7 +224,6 @@ export default defineComponent({
     },
   },
   emits: ['close', 'submit'],
-
   setup() {
     return {
       fileInput: ref<HTMLInputElement | null>(null),
@@ -227,7 +231,6 @@ export default defineComponent({
       authStore: useAuthStore(),
     };
   },
-
   data(): {
     isSubmitting: boolean;
     loadingImages: boolean;
@@ -240,6 +243,7 @@ export default defineComponent({
     failedImages: Set<string>;
     newImageCaption: string;
     requirements: Requirements;
+    uploadProgress: number;
   } {
     return {
       isSubmitting: false,
@@ -255,6 +259,7 @@ export default defineComponent({
       requirements: {
         allowed_formats: ['jpeg', 'jpg', 'png', 'gif'],
         max_size: '10MB (10240KB)',
+        max_size_bytes: 10 * 1024 * 1024,
         max_images_per_room: 8,
         min_images_per_room: 3,
         caption_max_length: 255,
@@ -264,9 +269,9 @@ export default defineComponent({
           'Only users with admin or agent roles can upload images.',
         ],
       },
+      uploadProgress: 0,
     };
   },
-
   watch: {
     initialImages: {
       handler(newImages) {
@@ -290,7 +295,6 @@ export default defineComponent({
       deep: true,
     },
   },
-
   async created() {
     if (!this.authStore.isAuthenticated || !AuthMiddleware.isSessionValid()) {
       this.handleError('You are not logged in. Please log in and try again.', true);
@@ -301,9 +305,7 @@ export default defineComponent({
       await this.fetchImages();
     }
   },
-
   methods: {
-    // Centralized error handling
     handleError(message: string, redirectToLogin = false) {
       console.error('Error:', message);
       Swal.fire({
@@ -322,8 +324,9 @@ export default defineComponent({
           this.router.push({ name: 'login' });
         }
       });
+      this.isSubmitting = false;
+      this.uploadProgress = 0;
     },
-
     async fetchRequirements() {
       try {
         const response = await makeRequest({
@@ -338,7 +341,6 @@ export default defineComponent({
         this.handleError(error.response?.data?.message || 'Failed to fetch upload requirements.');
       }
     },
-
     async fetchImages() {
       this.loadingImages = true;
       try {
@@ -349,10 +351,10 @@ export default defineComponent({
           requiresAuth: true,
         });
         if (response.status === 200) {
-          const images = Array.isArray(response.data.data) 
+          const images = Array.isArray(response.data.data)
             ? response.data.data[0]?.images || []
             : response.data.data.images || [];
-          
+         
           this.currentImages = images
             .filter((image: any) => image.room_id === this.roomId)
             .map((image: any) => ({
@@ -366,7 +368,7 @@ export default defineComponent({
               updated_at: image.updated_at ? format(new Date(image.updated_at), 'd MMMM yyyy') : 'None',
               user_id: image.user_id,
             }));
-          
+         
           if (this.currentImages.length === 0) {
             Swal.fire({
               title: 'Info',
@@ -390,7 +392,6 @@ export default defineComponent({
         this.loadingImages = false;
       }
     },
-
     resetFormState() {
       this.imagesToDelete = [];
       this.updatedCaptions = [];
@@ -398,16 +399,15 @@ export default defineComponent({
       this.imagePreviews = [];
       this.newImageCaption = '';
       this.errors = { images: '', newImageCaption: '' };
+      this.uploadProgress = 0;
       if (this.fileInput) {
         this.fileInput.value = '';
       }
     },
-
     getImageUrl(filePath: string): string {
       const baseUrl = import.meta.env.VITE_APP_API_BASE_URL.replace(/\/api$/, '');
       return `${baseUrl}/${filePath.replace(/^\/+/, '')}`;
     },
-
     handleImageError(event: Event, image: Image) {
       const target = event.target as HTMLImageElement;
       const defaultImage = `${import.meta.env.VITE_APP_API_BASE_URL.replace(/\/api$/, '')}/images/default.jpg`;
@@ -418,7 +418,6 @@ export default defineComponent({
         target.src = 'https://via.placeholder.com/150?text=Image+Not+Found';
       }
     },
-
     selectImageToReplace(image: Image) {
       if (this.replaceImageId === image.id) {
         this.replaceImageId = null;
@@ -433,95 +432,182 @@ export default defineComponent({
       }
       this.errors.images = '';
     },
-
     updateImageCaption(image: Image) {
-      this.errors[`caption_${image.id}`] = '';
-      if (image.caption && image.caption.length > this.requirements.caption_max_length) {
-        this.errors[`caption_${image.id}`] = `Caption must not exceed ${this.requirements.caption_max_length} characters`;
-        return;
-      }
-      const initialImage = this.initialImages.find(img => img.id === image.id);
-      if (initialImage && initialImage.caption !== image.caption) {
-        const existingUpdate = this.updatedCaptions.find(uc => uc.id === image.id);
-        if (existingUpdate) {
-          existingUpdate.caption = image.caption;
-        } else {
-          this.updatedCaptions.push({ id: image.id, caption: image.caption });
-        }
+      const existing = this.updatedCaptions.find(uc => uc.id === image.id);
+      if (existing) {
+        existing.caption = image.caption;
+      } else {
+        this.updatedCaptions.push({ id: image.id, caption: image.caption });
       }
     },
-
-    handleFileChange(event: Event) {
+    async compressImage(file: File): Promise<File> {
+      console.log(`Compressing image: ${file.name}, size: ${file.size} bytes`);
+      return new Promise((resolve, reject) => {
+        new Compressor(file, {
+          quality: 0.6,
+          maxWidth: 1920,
+          maxHeight: 1080,
+          mimeType: file.type,
+          success(compressedFile) {
+            console.log(`Image compressed: ${file.name}, new size: ${compressedFile.size} bytes`);
+            resolve(compressedFile as File);
+          },
+          error(err) {
+            console.error('Compression error:', err);
+            reject(new Error(`Failed to compress image: ${file.name}`));
+          },
+        });
+      });
+    },
+    async handleFileChange(event: Event) {
       this.errors.images = '';
       const input = event.target as HTMLInputElement;
       if (!input.files || !input.files.length) {
         this.errors.images = this.replaceImageId
           ? 'Please select an image to replace.'
           : 'Please select at least one image.';
+        this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
         this.imagePreviews = [];
         return;
       }
-
-      const maxSize = 10 * 1024 * 1024;
+      const maxSize = this.requirements.max_size_bytes;
       const allowedTypes = this.requirements.allowed_formats.map(fmt => `image/${fmt}`);
       const allowedExtensions = this.requirements.allowed_formats;
       const newImageCount = input.files.length;
-      const totalImages = this.currentImages.length + newImageCount - (this.replaceImageId ? 1 : this.imagesToDelete.length);
-
+      const currentImageCount = this.currentImages.length - (this.replaceImageId ? 1 : this.imagesToDelete.length);
+      // Check if adding new images would exceed the maximum limit
+      if (!this.replaceImageId && currentImageCount + newImageCount > this.requirements.max_images_per_room) {
+        this.errors.images = `Cannot add ${newImageCount} image(s). Maximum of ${this.requirements.max_images_per_room} images per room. Only ${this.requirements.max_images_per_room - currentImageCount} more image(s) can be added.`;
+        this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
+        this.imagePreviews = [];
+        return;
+      }
       if (this.replaceImageId && newImageCount > 1) {
         this.errors.images = 'Only one image can be selected for replacement.';
+        this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
         this.imagePreviews = [];
         return;
       }
-
-      if (!this.replaceImageId && totalImages > this.requirements.max_images_per_room) {
-        this.errors.images = `Cannot add ${newImageCount} image(s). Maximum of ${this.requirements.max_images_per_room} images per room.`;
-        this.imagePreviews = [];
-        return;
-      }
-
-      const previews: ImagePreview[] = [];
+      const compressedFiles: File[] = [];
       for (const file of Array.from(input.files)) {
         const extension = file.name.split('.').pop()?.toLowerCase() || '';
         if (!allowedTypes.includes(file.type) || !allowedExtensions.includes(extension)) {
           this.errors.images = `Only ${allowedExtensions.join(', ')} files are allowed.`;
+          this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
           this.imagePreviews = [];
           return;
         }
         if (file.size > maxSize) {
-          this.errors.images = 'Each image must not exceed 10MB.';
+          this.errors.images = 'Each image must not exceed 10MB before compression.';
+          this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
           this.imagePreviews = [];
           return;
         }
-        previews.push({ url: URL.createObjectURL(file), file });
+        if (file.size > maxSize / 2) {
+          Swal.fire({
+            title: 'Large File Detected',
+            text: 'Your image will be compressed to reduce size, which may affect quality.',
+            icon: 'info',
+            position: 'top-end',
+            toast: true,
+            showConfirmButton: false,
+            timer: 3000,
+          });
+        }
+        try {
+          const compressedFile = await this.compressImage(file);
+          compressedFiles.push(compressedFile);
+        } catch (error: any) {
+          this.errors.images = error.message;
+          this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
+          this.imagePreviews = [];
+          return;
+        }
       }
-      this.imagePreviews = previews;
+      this.imagePreviews = compressedFiles.map(file => ({ url: URL.createObjectURL(file), file }));
+      this.errors.images = '';
+      console.log(`Successfully processed ${compressedFiles.length} images`);
     },
-
     removePreview(index: number) {
+      URL.revokeObjectURL(this.imagePreviews[index].url);
       this.imagePreviews.splice(index, 1);
-      if (!this.imagePreviews.length) {
-        this.errors.images = 'Please select at least one image.';
+      if (!this.imagePreviews.length && !this.imagesToDelete.length && !this.updatedCaptions.length) {
+        this.errors.images = 'Please select images to add, replace, delete, or update captions.';
       }
     },
-
+    async uploadChunk(
+      file: File,
+      chunk: Blob,
+      chunkIndex: number,
+      totalChunks: number,
+      filename: string,
+      propertyId: number,
+      roomId: number,
+      userId: string,
+      caption: string,
+      retryCount = 0
+    ): Promise<any> {
+      console.log(`Uploading chunk ${chunkIndex + 1}/${totalChunks} for ${filename} (attempt ${retryCount + 1})`);
+      const formData = new FormData();
+      formData.append('chunk', chunk);
+      formData.append('chunk_index', String(chunkIndex));
+      formData.append('total_chunks', String(totalChunks));
+      formData.append('filename', filename);
+      formData.append('property_id', String(propertyId));
+      formData.append('room_id', String(roomId));
+      formData.append('user_id', userId);
+      formData.append('caption', caption);
+      formData.append('session_id', uuidv4());
+      try {
+        const response = await makeRequest({
+          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/room-images/chunk`,
+          method: 'post',
+          data: formData,
+          requiresAuth: true,
+          onUploadProgress: (progressEvent: AxiosProgressEvent) => {
+            if (progressEvent.total) {
+              const progress = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+              this.uploadProgress = Math.min(100, (chunkIndex / totalChunks) * 100 + (progress / totalChunks));
+            }
+          },
+        });
+        console.log(`Chunk ${chunkIndex + 1} response:`, response);
+        if (response.status !== 200 && response.status !== 201) {
+          console.error(`Chunk upload failed with status ${response.status}:`, response.data);
+          throw new Error(`HTTP ${response.status}: ${response.data?.message || 'Chunk upload failed.'}`);
+        }
+        return response;
+      } catch (error: any) {
+        console.error('Chunk upload error:', {
+          filename,
+          chunkIndex,
+          totalChunks,
+          retryCount,
+          error: error.message,
+          response: error.response?.data,
+        });
+        if (retryCount < 3) {
+          console.log(`Retrying chunk upload in ${1000 * (retryCount + 1)}ms`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.uploadChunk(file, chunk, chunkIndex, totalChunks, filename, propertyId, roomId, userId, caption, retryCount + 1);
+        }
+        throw new Error(`Failed to upload chunk for ${filename} after 3 retries: ${error.message}`);
+      }
+    },
     async submitForm() {
       if (this.isSubmitting) return;
       this.errors = { images: '', newImageCaption: '' };
       this.updatedCaptions.forEach(({ id }) => {
         this.errors[`caption_${id}`] = '';
       });
-
       if (!this.imagePreviews.length && !this.imagesToDelete.length && !this.updatedCaptions.length) {
         this.errors.images = 'Please select images to add, replace, delete, or update captions.';
         return;
       }
-
       if (this.newImageCaption && this.newImageCaption.length > this.requirements.caption_max_length) {
         this.errors.newImageCaption = `Caption must not exceed ${this.requirements.caption_max_length} characters`;
         return;
       }
-
       if (this.updatedCaptions.some(({ caption }) => caption && caption.length > this.requirements.caption_max_length)) {
         this.updatedCaptions.forEach(({ id, caption }) => {
           if (caption && caption.length > this.requirements.caption_max_length) {
@@ -530,36 +616,30 @@ export default defineComponent({
         });
         return;
       }
-
       if (this.propertyId === null) {
         this.handleError('Property ID is required to proceed.');
         return;
       }
-
       if (!this.authStore.isAuthenticated || !AuthMiddleware.isSessionValid()) {
         this.handleError('You are not logged in. Please log in and try again.', true);
         return;
       }
-
       this.isSubmitting = true;
+      this.uploadProgress = 0;
       try {
         const userProfile = this.authStore.userProfile;
         if (!userProfile?.id) {
           throw new Error('User profile not found. Please log in again.');
         }
-
         console.log('Submitting form with user_id:', userProfile.id);
-
         // Handle image deletion
         if (this.imagesToDelete.length) {
           await this.deleteImages(userProfile.id);
         }
-
         // Handle caption updates
         if (this.updatedCaptions.length) {
           await this.updateCaptions(userProfile.id);
         }
-
         // Handle image replacement or addition
         if (this.imagePreviews.length) {
           if (this.replaceImageId) {
@@ -568,7 +648,6 @@ export default defineComponent({
             await this.addImages(userProfile.id);
           }
         }
-
         Swal.fire({
           title: 'Success!',
           text: 'Room images updated successfully.',
@@ -578,27 +657,35 @@ export default defineComponent({
           showConfirmButton: false,
           timer: 3000,
         });
-
         this.$emit('submit');
         this.$emit('close');
       } catch (error: any) {
-        const errorMessage = error.response?.status === 401
-          ? 'Your session has expired or the token is invalid. Please log in again.'
-          : error.response?.status === 422 && error.response?.data?.errors
-            ? Object.entries(error.response.data.errors)
-                .map(([key, value]) => [key === 'images.0' ? 'images' : key, Array.isArray(value) ? value[0] : value])
-                .filter(Boolean)
-                .join('; ')
-            : error.message || 'Failed to update room images.';
+        const errorMessage = error.response?.status === 413
+          ? 'The uploaded data is too large. Please try uploading smaller images or contact support.'
+          : error.response?.status === 401
+            ? 'Your session has expired or the token is invalid. Please log in again.'
+            : error.response?.status === 422
+              ? error.response?.data?.message || 'Validation error: Please check your input and try again.'
+              : error.response?.status === 500
+                ? error.response?.data?.message || 'Server error: Failed to process the request. Please try again or contact support.'
+                : error.response?.data?.errors
+                  ? Object.entries(error.response.data.errors)
+                      .map(([key, value]) => [key === 'images.0' ? 'images' : key, Array.isArray(value) ? value[0] : value])
+                      .filter(Boolean)
+                      .join('; ')
+                  : error.message || 'Failed to update room images.';
+        console.error('Submission error:', error.response?.data || error.message);
         this.handleError(errorMessage, error.response?.status === 401 || error.message.includes('User profile not found'));
+        this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
+        this.imagePreviews = [];
       } finally {
         this.isSubmitting = false;
+        this.uploadProgress = 0;
         if (this.fileInput) {
           this.fileInput.value = '';
         }
       }
     },
-
     async deleteImages(userId: string) {
       try {
         const response = await makeRequest({
@@ -615,13 +702,12 @@ export default defineComponent({
         throw new Error(error.response?.data?.message || 'Failed to delete images.');
       }
     },
-
     async updateCaptions(userId: string) {
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/room-images/bulk-update`,
           method: 'post',
-          data: { images: this.updatedCaptions, user_id: userId },
+          data: { updates: this.updatedCaptions, user_id: userId },
           requiresAuth: true,
         });
         if (response.status === 200) {
@@ -635,21 +721,36 @@ export default defineComponent({
         throw new Error(error.response?.data?.message || 'Failed to update captions.');
       }
     },
-
     async replaceImage(userId: string) {
-      if (!this.replaceImageId || !this.imagePreviews.length || this.propertyId === null) return;
-      const formData = new FormData();
-      formData.append('image', this.imagePreviews[0].file);
-      formData.append('caption', this.newImageCaption || '');
-      formData.append('property_id', String(this.propertyId));
-      formData.append('room_id', String(this.roomId));
-      formData.append('user_id', userId);
-
+      if (!this.replaceImageId || !this.imagePreviews.length || this.propertyId === null) {
+        throw new Error('Missing required data for image replacement.');
+      }
+      const file = this.imagePreviews[0].file;
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      const filename = `${uuidv4()}_room-testimonial-replace.${extension}`;
+      const chunkSize = 2 * 1024 * 1024; // 2MB chunks
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      // Upload chunks
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * chunkSize;
+        const end = Math.min(start + chunkSize, file.size);
+        const chunk = file.slice(start, end);
+        await this.uploadChunk(file, chunk, i, totalChunks, filename, this.propertyId, this.roomId, userId, this.newImageCaption || '');
+      }
+      // Prepare payload for replace request
+      const payload = {
+        filename,
+        property_id: this.propertyId,
+        room_id: this.roomId,
+        user_id: userId,
+        caption: this.newImageCaption || '',
+      };
+      console.log('Sending replace request with payload:', payload); // Debug payload
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/room-images/${this.replaceImageId}/replace`,
           method: 'post',
-          data: formData,
+          data: payload,
           requiresAuth: true,
         });
         if (response.status === 200) {
@@ -665,37 +766,53 @@ export default defineComponent({
                 }
               : img
           );
+          this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
           this.imagePreviews = [];
           this.replaceImageId = null;
           this.newImageCaption = '';
         }
       } catch (error: any) {
+        console.error('Replace request failed:', error.response?.data || error.message);
         throw new Error(error.response?.data?.message || 'Failed to replace image.');
       }
     },
-
     async addImages(userId: string) {
       if (this.propertyId === null) return;
-      const formData = new FormData();
-      this.imagePreviews.forEach((preview, index) => {
-        formData.append(`images[]`, preview.file);
-        formData.append(`captions[]`, this.newImageCaption || '');
-      });
-      formData.append('property_id', String(this.propertyId));
-      formData.append('room_id', String(this.roomId));
-      formData.append('user_id', userId);
-
-      try {
-        const response = await makeRequest({
-          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/room-images`,
-          method: 'post',
-          data: formData,
-          requiresAuth: true,
-        });
-        if (response.status === 201) {
-          const newImages = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
-          this.currentImages.push(
-            ...newImages.map((image: any) => ({
+      const chunkSize = 2 * 1024 * 1024; // 2MB chunks
+      const newImages: Image[] = [];
+      const availableSlots = this.requirements.max_images_per_room - (this.currentImages.length - this.imagesToDelete.length);
+      if (this.imagePreviews.length > availableSlots) {
+        this.errors.images = `Cannot add ${this.imagePreviews.length} image(s). Only ${availableSlots} more image(s) can be added to reach the maximum of ${this.requirements.max_images_per_room}.`;
+        this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
+        this.imagePreviews = [];
+        return;
+      }
+      for (const [index, preview] of this.imagePreviews.entries()) {
+        const file = preview.file;
+        const extension = file.name.split('.').pop()?.toLowerCase() || '';
+        const filename = `${uuidv4()}_room-testimonial-${index + 1}.${extension}`;
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        let lastResponse: any = null;
+        try {
+          for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, file.size);
+            const chunk = file.slice(start, end);
+            lastResponse = await this.uploadChunk(
+              file,
+              chunk,
+              i,
+              totalChunks,
+              filename,
+              this.propertyId,
+              this.roomId,
+              userId,
+              this.newImageCaption || ''
+            );
+          }
+          if (lastResponse.status === 201) {
+            const image = lastResponse.data.data;
+            newImages.push({
               id: image.id,
               property_id: image.property_id,
               room_id: image.room_id,
@@ -705,19 +822,21 @@ export default defineComponent({
               created_at: image.created_at ? format(new Date(image.created_at), 'd MMMM yyyy') : 'None',
               updated_at: image.updated_at ? format(new Date(image.updated_at), 'd MMMM yyyy') : 'None',
               user_id: image.user_id,
-            }))
-          );
-          this.imagePreviews = [];
-          this.newImageCaption = '';
+            });
+          }
+        } catch (error: any) {
+          console.error(`Failed to upload image ${filename}:`, error.message);
+          throw new Error(`Failed to upload image ${index + 1}: ${error.message}`);
         }
-      } catch (error: any) {
-        throw new Error(error.response?.data?.message || 'Failed to add images.');
       }
+      this.currentImages.push(...newImages);
+      this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
+      this.imagePreviews = [];
+      this.newImageCaption = '';
     },
   },
 });
 </script>
-
 <style scoped>
 /* Container */
 .p-6 {
@@ -732,7 +851,6 @@ export default defineComponent({
 .rounded-lg {
   border-radius: 0.5rem;
 }
-
 /* Typography */
 .text-2xl {
   font-size: 1.5rem;
@@ -767,13 +885,9 @@ export default defineComponent({
 .text-blue-700 {
   color: #1d4ed8;
 }
-.hover\:text-blue-100:hover {
-  background-color: #dbeafe;
-}
 .text-red-700 {
   color: #b91c1c;
 }
-
 /* Grid */
 .grid {
   display: grid;
@@ -797,7 +911,6 @@ export default defineComponent({
 .gap-4 {
   gap: 1rem;
 }
-
 /* Image Container */
 .relative {
   position: relative;
@@ -830,7 +943,6 @@ export default defineComponent({
 .object-cover {
   object-fit: cover;
 }
-
 /* Inputs and Labels */
 .cursor-pointer {
   cursor: pointer;
@@ -853,7 +965,6 @@ export default defineComponent({
 .mr-1 {
   margin-right: 0.25rem;
 }
-
 /* File Input */
 .file\:mr-4::file-selector-button {
   margin-right: 1rem;
@@ -887,7 +998,6 @@ export default defineComponent({
 .hover\:file\:bg-blue-100:hover::file-selector-button {
   background-color: #dbeafe;
 }
-
 /* Delete Button */
 .absolute {
   position: absolute;
@@ -904,13 +1014,6 @@ export default defineComponent({
 .w-5 {
   width: 1.25rem;
 }
-.text-red-500 {
-  color: #ef4444;
-}
-.hover\:text-red-700:hover {
-  color: #b91c1c;
-}
-
 /* Form Actions */
 .flex {
   display: flex;
@@ -921,7 +1024,6 @@ export default defineComponent({
 .space-x-3 > :not(:last-child) {
   margin-right: 0.75rem;
 }
-
 /* Spinner */
 .spinner {
   width: 1rem;
@@ -936,5 +1038,18 @@ export default defineComponent({
   to {
     transform: rotate(360deg);
   }
+}
+/* Progress Bar */
+.bg-gray-200 {
+  background-color: #e5e7eb;
+}
+.rounded-full {
+  border-radius: 9999px;
+}
+.h-2\.5 {
+  height: 0.625rem;
+}
+.bg-blue-600 {
+  background-color: #2563eb;
 }
 </style>

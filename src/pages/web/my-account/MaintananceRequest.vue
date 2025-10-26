@@ -1,7 +1,6 @@
 <template>
   <div class="account-home">
     <div class="activity-section">
-      <!-- Breadcrumb Navigation -->
       <nav class="breadcrumb" aria-label="breadcrumb">
         <ol>
           <li>
@@ -61,6 +60,7 @@
           <thead>
             <tr>
               <th>Property</th>
+              <th>Room</th>
               <th>Description</th>
               <th>Contractor</th>
               <th>Status</th>
@@ -70,23 +70,15 @@
           <tbody>
             <tr v-for="request in maintenanceRequests" :key="request.id">
               <td>{{ request.property_title || 'N/A' }}</td>
+              <td>{{ request.room_number || 'N/A' }}</td>
               <td>{{ request.description || 'N/A' }}</td>
               <td>
-                {{ request.contractor_name || 'Not Assigned' }}
-                <span v-if="!request.contractor_name" class="text-sm text-gray-500">
-                  (Waiting for contractor to be assigned to resolve the case)
-                </span>
+                <span v-if="request.contractor_name">{{ request.contractor_name }}</span>
+                <span v-else class="badge bg-waiting">Please wait for contractor assignment</span>
               </td>
               <td>
-                <span
-                  :class="{
-                    'badge': true,
-                    'bg-success': request.status === 'completed',
-                    'bg-warning': request.status === 'pending',
-                    'bg-danger': request.status === 'rejected'
-                  }"
-                >
-                  {{ request.status || 'N/A' }}
+                <span class="badge" :class="statusBadgeClass(request.status)">
+                  {{ formatStatus(request.status) }}
                 </span>
               </td>
               <td>{{ formatDate(request.created_at) || 'N/A' }}</td>
@@ -95,7 +87,6 @@
         </table>
       </div>
 
-      <!-- Modal for creating maintenance request -->
       <div v-if="showModal" class="modal-overlay">
         <div class="modal-content">
           <div class="modal-header">
@@ -110,13 +101,37 @@
                 id="property_id"
                 class="form-control"
                 required
-                :disabled="isSubmitting"
+                :disabled="isSubmitting || isLoadingProperties"
+                @change="fetchRooms"
               >
                 <option value="" disabled>Select a property</option>
                 <option v-for="property in properties" :key="property.id" :value="property.id">
                   {{ property.title }}
                 </option>
               </select>
+              <p v-if="isLoadingProperties" class="text-gray-600 text-sm mt-2">Loading properties...</p>
+              <p v-else-if="properties.length === 0" class="text-red-600 text-sm mt-2">
+                No properties available. Please contact support.
+              </p>
+            </div>
+            <div class="form-group">
+              <label for="room_id">Room</label>
+              <select
+                v-model="form.room_id"
+                id="room_id"
+                class="form-control"
+                required
+                :disabled="isSubmitting || isLoadingRooms || !form.property_id || rooms.length === 0"
+              >
+                <option value="" disabled>Select a room</option>
+                <option v-for="room in rooms" :key="room.id" :value="room.id">
+                  {{ room.room_number }} {{ room.description ? `(${room.description})` : '' }}
+                </option>
+              </select>
+              <p v-if="isLoadingRooms" class="text-gray-600 text-sm mt-2">Loading rooms...</p>
+              <p v-else-if="form.property_id && rooms.length === 0" class="text-red-600 text-sm mt-2">
+                No rooms available for this property.
+              </p>
             </div>
             <div class="form-group">
               <label for="description">Description</label>
@@ -135,7 +150,7 @@
               <button
                 type="submit"
                 class="cta-button bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-                :disabled="isSubmitting"
+                :disabled="isSubmitting || isLoadingRooms || isLoadingProperties || !form.property_id || !form.room_id"
               >
                 {{ isSubmitting ? 'Submitting...' : 'Submit Request' }}
               </button>
@@ -149,14 +164,17 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import makeRequest from '../../../services/makeRequest';
+import { debounce } from 'lodash'; // Optional: Import lodash for debouncing
 
 interface MaintenanceRequest {
   id: string;
   property_id: string;
   property_title: string | null;
+  room_id: string | null;
+  room_number: string | null;
   user_id: string;
   user_name: string | null;
   contractor_id: string | null;
@@ -171,11 +189,22 @@ interface Property {
   title: string;
 }
 
+interface Room {
+  id: string;
+  room_number: string;
+  description: string | null;
+}
+
 interface UserData {
   id: number;
   token: string;
   expiresAt: number;
 }
+
+// Define the type for the error message mapping object
+type ErrorMap = {
+  [key: string]: string;
+};
 
 const router = useRouter();
 const isLoading = ref(true);
@@ -184,11 +213,15 @@ const errorMessage = ref('');
 const maintenanceRequests = ref<MaintenanceRequest[]>([]);
 const showModal = ref(false);
 const isSubmitting = ref(false);
+const isLoadingRooms = ref(false);
+const isLoadingProperties = ref(false);
 const formError = ref('');
 const properties = ref<Property[]>([]);
+const rooms = ref<Room[]>([]);
 
 const form = ref({
   property_id: '',
+  room_id: '',
   description: '',
 });
 
@@ -227,6 +260,26 @@ const formatDate = (dateString: string) => {
   }
 };
 
+const formatStatus = (status: string) => {
+  if (!status) return 'N/A';
+  return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
+};
+
+const statusBadgeClass = (status: string) => {
+  switch (status?.toLowerCase()) {
+    case 'completed':
+      return 'bg-success';
+    case 'pending':
+      return 'bg-warning';
+    case 'in_progress':
+      return 'bg-info';
+    case 'rejected':
+      return 'bg-danger';
+    default:
+      return 'bg-gray';
+  }
+};
+
 const fetchMaintenanceRequests = async () => {
   isLoading.value = true;
   showError.value = false;
@@ -256,10 +309,12 @@ const fetchMaintenanceRequests = async () => {
         id: request.id,
         property_id: request.property_id,
         property_title: request.property_title || 'N/A',
+        room_id: request.room_id,
+        room_number: request.room_number || 'N/A',
         user_id: request.user_id,
         user_name: request.user_name || 'N/A',
         contractor_id: request.contractor_id,
-        contractor_name: request.contractor_name || 'Not Assigned',
+        contractor_name: request.contractor_name || null,
         description: request.description || 'N/A',
         status: request.status || 'N/A',
         created_at: request.created_at || '',
@@ -270,8 +325,6 @@ const fetchMaintenanceRequests = async () => {
       showError.value = true;
       errorMessage.value = 'Unexpected response format from server.';
     }
-
-    console.log('Processed maintenance requests:', maintenanceRequests.value);
   } catch (error: any) {
     console.error('Error fetching maintenance requests:', error);
     showError.value = true;
@@ -282,8 +335,15 @@ const fetchMaintenanceRequests = async () => {
 };
 
 const fetchProperties = async () => {
+  isLoadingProperties.value = true;
+  formError.value = '';
+
   const userData = getUserData();
-  if (!userData) return;
+  if (!userData) {
+    console.log('No valid user data, redirecting to login');
+    router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } });
+    return;
+  }
 
   try {
     const response = await makeRequest({
@@ -294,26 +354,96 @@ const fetchProperties = async () => {
     });
 
     const leaseData = response.data?.data || [];
-    properties.value = leaseData
-      .filter((lease: any) => !lease.deleted_at)
-      .map((lease: any) => ({
-        id: lease.property_id,
-        title: lease.property_title || 'N/A',
-      }));
+    // Deduplicate properties by property_id
+    const uniqueProperties = new Map();
+    leaseData
+      .filter((lease: any) => !lease.deleted_at && lease.property_id && lease.property_title)
+      .forEach((lease: any) => {
+        uniqueProperties.set(lease.property_id, {
+          id: lease.property_id,
+          title: lease.property_title || 'N/A',
+        });
+      });
+
+    properties.value = Array.from(uniqueProperties.values());
+    if (properties.value.length === 0) {
+      formError.value = 'No properties found for your active leases.';
+    }
   } catch (error: any) {
     console.error('Error fetching properties:', error);
-    formError.value = 'Failed to load properties.';
+    formError.value = error.response?.data?.message || 'Failed to load properties.';
+    properties.value = [];
+  } finally {
+    isLoadingProperties.value = false;
   }
 };
 
-const openModal = () => {
-  form.value = { property_id: '', description: '' };
+// Debounced fetchRooms to prevent rapid API calls (optional)
+const fetchRooms = debounce(async () => {
+  if (!form.value.property_id) {
+    rooms.value = [];
+    form.value.room_id = '';
+    return;
+  }
+
+  isLoadingRooms.value = true;
   formError.value = '';
+
+  const userData = getUserData();
+  if (!userData) {
+    closeModal();
+    router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } });
+    return;
+  }
+
+  try {
+    const response = await makeRequest({
+      method: 'GET',
+      url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/tenant/maintenance-requests/rooms/${form.value.property_id}`,
+      headers: { Authorization: `Bearer ${userData.token}` },
+      requiresAuth: true,
+    });
+
+    console.log('Rooms API Response:', response);
+
+    rooms.value = response.data?.data || [];
+    if (rooms.value.length === 0) {
+      formError.value = 'No rooms available for this property.';
+    }
+  } catch (error: any) {
+    console.error('Error fetching rooms:', error);
+    const errorMsg: string = error.response?.data?.message || 'Failed to load rooms.';
+    
+    // ✨ FIX: Use the ErrorMap type definition to allow indexing with a string type
+    const errorMap: ErrorMap = {
+      'You do not have an active lease for this property': 'No active lease found for this property.',
+      'Property not found': 'The selected property does not exist.',
+      'Unauthenticated': 'Please log in to continue.',
+    };
+
+    // Cast errorMsg to keyof ErrorMap or simply use the index signature
+    formError.value = errorMap[errorMsg] || errorMsg; 
+    
+    rooms.value = [];
+  } finally {
+    isLoadingRooms.value = false;
+    form.value.room_id = ''; // Reset room selection
+  }
+}, 300);
+
+const openModal = async () => {
+  form.value = { property_id: '', room_id: '', description: '' };
+  rooms.value = [];
+  formError.value = '';
+  await fetchProperties(); // Fetch properties when opening modal
   showModal.value = true;
 };
 
 const closeModal = () => {
   showModal.value = false;
+  form.value = { property_id: '', room_id: '', description: '' };
+  rooms.value = [];
+  formError.value = '';
 };
 
 const submitMaintenanceRequest = async () => {
@@ -342,10 +472,12 @@ const submitMaintenanceRequest = async () => {
       id: response.data.data.id,
       property_id: response.data.data.property_id,
       property_title: response.data.data.property_title || 'N/A',
+      room_id: response.data.data.room_id,
+      room_number: response.data.data.room_number || 'N/A',
       user_id: response.data.data.user_id,
       user_name: response.data.data.user_name || 'N/A',
       contractor_id: response.data.data.contractor_id,
-      contractor_name: response.data.data.contractor_name || 'Not Assigned',
+      contractor_name: response.data.data.contractor_name || null,
       description: response.data.data.description,
       status: response.data.data.status,
       created_at: response.data.data.created_at,
@@ -369,7 +501,7 @@ onMounted(() => {
     return;
   }
   fetchMaintenanceRequests();
-  fetchProperties();
+  // Fetch properties only when opening modal to avoid unnecessary API calls
 });
 </script>
 
@@ -457,6 +589,8 @@ onMounted(() => {
           border-radius: 12px;
           font-size: 0.9rem;
           color: white;
+          display: inline-block;
+          text-transform: capitalize;
 
           &.bg-success {
             background-color: #22c55e;
@@ -466,8 +600,20 @@ onMounted(() => {
             background-color: #eab308;
           }
 
+          &.bg-info {
+            background-color: #3b82f6;
+          }
+
           &.bg-danger {
             background-color: #ef4444;
+          }
+
+          &.bg-gray {
+            background-color: #6b7280;
+          }
+
+          &.bg-waiting {
+            background-color: #f59e0b;
           }
         }
       }

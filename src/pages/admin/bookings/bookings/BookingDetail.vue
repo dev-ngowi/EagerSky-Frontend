@@ -38,7 +38,7 @@ import Swal from 'sweetalert2';
 const route = useRoute();
 const booking = ref<any>(null);
 const loading = ref<boolean>(true);
-const API_BASE_URL = import.meta.env.VITE_APP_API_BASE_URL || 'https://e1.japango.co.tz';
+const API_BASE_URL = import.meta.env.VITE_APP_API_BASE_URL || 'https://app.eagersky.co.tz';
 
 onMounted(async () => {
   try {

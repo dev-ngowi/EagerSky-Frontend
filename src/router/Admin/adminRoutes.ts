@@ -32,8 +32,17 @@ export const adminRoutes: RouteRecordRaw[] = [
         component: () => import('../../pages/admin/user-management/roles/RoleAssignment.vue'),
         meta: { requiresAuth: true, title: 'Assign Roles', icon: 'user-check', roles: ['admin'] },
       },
+      {
+        name: 'assign-approvers',
+        path: 'assign-approvers',
+        component: () => import('../../pages/admin/user-management/approval/assignApprovers.vue'),
+        meta: { requiresAuth: true, title: 'Assign Approvers', icon: 'user-check', roles: ['admin'] },
+      },
+
+      
     ],
   },
+
   {
     name: 'property-management',
     path: 'property-management',
@@ -46,6 +55,18 @@ export const adminRoutes: RouteRecordRaw[] = [
         component: RouteViewComponent,
         meta: { requiresAuth: true, title: 'Properties Master', icon: 'home', roles: ['admin'] },
         children: [
+          {
+              name: 'owner-management',
+              path: 'owner-management',
+              component: () => import('../../pages/admin/properties/owner/PropertyOwnerList.vue'),
+              meta: { 
+                requiresAuth: true, 
+                title: 'Property Owner', 
+                icon: 'real_estate_agent', // updated icon
+                roles: ['admin'] 
+              },
+            },
+
           {
             name: 'category',
             path: 'category',
@@ -142,32 +163,33 @@ export const adminRoutes: RouteRecordRaw[] = [
           },       
         ],
       },
+     {
+    name: 'documents-management',
+    path: 'documents-management',
+    component: RouteViewComponent,
+    meta: { requiresAuth: true, title: 'Documents', icon: 'description', roles: ['admin'] },
+    children: [
       {
-        name: 'documents-management',
-        path: 'documents-management',
-        component: RouteViewComponent,
-        meta: { requiresAuth: true, title: 'Documents', icon: 'description', roles: ['admin'] },
-        children: [
-          {
-            name: 'document-category',
-            path: 'document-category',
-            component: () => import('../../pages/admin/documents/categories/DocumentCategoryList.vue'),
-            meta: { requiresAuth: true, title: 'Categories', icon: 'category', roles: ['admin'] },
-          },
-          {
-            name: 'documents',
-            path: 'documents',
-            component: () => import('../../pages/admin/documents/documents/DocumentList.vue'),
-            meta: { requiresAuth: true, title: 'Documents', icon: 'insert_drive_file', roles: ['admin'] },
-          },
-          {
-            name: 'templates',
-            path: 'templates',
-            component: () => import('../../pages/admin/documents/templates/TemplateList.vue'),
-            meta: { requiresAuth: true, title: 'Templates', icon: 'article', roles: ['admin'] },
-          },
-        ],
+        name: 'document-category',
+        path: 'document-category',
+        component: () => import('../../pages/admin/documents/categories/DocumentCategoryList.vue'),
+        meta: { requiresAuth: true, title: 'Categories', icon: 'category', roles: ['admin'] },
       },
+      {
+        name: 'documents',
+        path: 'documents',
+        component: () => import('../../pages/admin/documents/documents/DocumentList.vue'),
+        meta: { requiresAuth: true, title: 'Documents', icon: 'insert_drive_file', roles: ['admin'] },
+      },
+      {
+        name: 'templates',
+        path: 'templates',
+        component: () => import('../../pages/admin/documents/templates/TemplateList.vue'),
+        meta: { requiresAuth: true, title: 'Templates', icon: 'article', roles: ['admin'] },
+      },
+      
+    ],
+  },
     ],
   },
   {
@@ -209,8 +231,8 @@ export const adminRoutes: RouteRecordRaw[] = [
         meta: { requiresAuth: true, title: 'Rental & Leads', icon: 'people', roles: ['admin'] },
         children: [
           {
-            name: 'rental-applications',
-            path: 'rental-applications',
+            name: 'admin-rental-applications',
+            path: 'admin-rental-applications',
             component: () => import('../../pages/admin/clients/rental/RentalApplications.vue'),
             meta: { requiresAuth: true, title: 'Rental Applications', icon: 'assignment', roles: ['admin'] },
           },
@@ -343,24 +365,43 @@ export const adminRoutes: RouteRecordRaw[] = [
     ],
   },
   
-  {
-    name: 'report-master',
-    path: 'report-master',
-    component: RouteViewComponent,
-    meta: { requiresAuth: true, title: 'Report Master', icon: 'assessment', roles: ['admin'] },
-    children: [
-      {
-        name: 'property-reports',
-        path: 'property-reports',
-        component: () => import('../../pages/admin/reports/property/PropertyReports.vue'),
-        meta: { requiresAuth: true, title: 'Property Reports', icon: 'house', roles: ['admin'] },
-      },
-      {
-        name: 'financial-reports',
-        path: 'financial-reports',
-        component: () => import('../../pages/admin/reports/financial/FinancialReports.vue'),
-        meta: { requiresAuth: true, title: 'Financial Reports', icon: 'attach_money', roles: ['admin'] },
-      },
-    ],
-  },
+{
+  name: 'report-master',
+  path: 'report-master',
+  component: RouteViewComponent,
+  meta: { requiresAuth: true, title: 'Report Master', icon: 'bar_chart', roles: ['admin'] }, // Updated icon to match menu
+  children: [
+    {
+      name: 'property-reports',
+      path: 'property-reports',
+      component: () => import('../../pages/admin/reports/property/PropertyReports.vue'),
+      meta: { requiresAuth: true, title: 'Property Reports', icon: 'home', roles: ['admin'] }, // Updated icon to match menu
+    },
+    {
+      name: 'booking-reports',
+      path: 'booking-reports',
+      component: () => import('../../pages/admin/reports/booking/BookingReports.vue'),
+      meta: { requiresAuth: true, title: 'Bookings Reports', icon: 'event', roles: ['admin'] }, // Added route with matching icon
+    },
+    {
+      name: 'rental-reports',
+      path: 'rental-reports',
+      component: () => import('../../pages/admin/reports/rental/RentalReports.vue'),
+      meta: { requiresAuth: true, title: 'Rentals Reports', icon: 'store', roles: ['admin'] }, // Added route with matching icon
+    },
+    {
+      name: 'lease-reports',
+      path: 'lease-reports',
+      component: () => import('../../pages/admin/reports/lease/LeaseReports.vue'),
+      meta: { requiresAuth: true, title: 'Leases Reports', icon: 'description', roles: ['admin'] }, // Added route with matching icon
+    },
+    {
+      name: 'payments-reports',
+      path: 'payments-reports',
+      component: () => import('../../pages/admin/reports/payments/PaymentsReports.vue'),
+      meta: { requiresAuth: true, title: 'Payments Reports', icon: 'payments', roles: ['admin'] }, // Added route with matching icon
+    },
+  ],
+}
+
 ];

@@ -20,7 +20,7 @@
           <li>
             <router-link
               v-if="isAuthenticated"
-              to="/my-account"
+              :to="dashboardPath"
               class="btn btn-primary my-account-btn"
               :class="{ active: isMyAccountActive }"
               @click="closeNavAndSearch"
@@ -33,17 +33,9 @@
               class="btn btn-primary my-account-btn"
               @click="closeNavAndSearch"
             >
-              Log In
+              Sign In
             </router-link>
           </li>
-          <!-- <li v-if="isAuthenticated">
-            <button
-              class="btn btn-secondary logout-btn"
-              @click="logout"
-            >
-              Log Out
-            </button>
-          </li> -->
         </ul>
         <div class="search-container" :class="{ active: searchOpen }">
           <input
@@ -83,6 +75,8 @@ import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth-store'; // Adjust path to match your store location
 import EagerLogo from './EagerLogo.vue';
 import webNavigation from '../navigation/Web/webNavigation';
+// IMPORTANT: Import encodePath utility from your router file
+import { encodePath } from '../router/index';
 
 const router = useRouter();
 const route = useRoute();
@@ -92,19 +86,35 @@ const searchOpen = ref(false);
 const searchQuery = ref('');
 const isMobile = ref(window.innerWidth <= 768);
 
-// Remove the emit to parent layout as it's not being used in the parent
-// const emit = defineEmits(['mobile-nav-toggle', 'close-mobile-nav']);
-
 const isAuthenticated = computed(() => {
   return authStore.isAuthenticated;
 });
+
+// Assuming your AuthStore exposes a `userRole` property
+const userRole = computed<string | undefined>(() => (authStore as any).userRole); 
+
+const dashboardPath = computed(() => {
+  const role = userRole.value;
+
+  if (role === 'admin') {
+    return `/app/${encodePath('dashboard')}`;
+  } else if (role === 'tenant') {
+    return `/tenant/${encodePath('tenant-home')}`;
+  } else if (role === 'landlord') {
+    return `/landlord/${encodePath('dashboard')}`;
+  }
+  // Fallback for authenticated user with no specific role or initial state
+  return '/home'; 
+});
+
 
 const publicRoutes = computed(() => {
   return webNavigation.routes.filter((route) => !route.meta.requiresAuth);
 });
 
 const isMyAccountActive = computed(() => {
-  return route.path.startsWith('/my-account');
+  // Check if the current path starts with any of the role-based dashboard prefixes
+  return route.path.startsWith('/tenant') || route.path.startsWith('/landlord') || route.path.startsWith('/app');
 });
 
 const getRoutePath = (navRoute: { name: string }) => {
@@ -121,14 +131,13 @@ const updateIsMobile = () => {
 
 const toggleMobileNav = () => {
   mobileNavOpen.value = !mobileNavOpen.value;
-  searchOpen.value = false; // Ensure search is closed
+  searchOpen.value = false;
   document.body.style.overflow = mobileNavOpen.value ? 'hidden' : '';
 };
 
 const toggleSearch = () => {
   searchOpen.value = !searchOpen.value;
-  mobileNavOpen.value = false; // Ensure mobile nav is closed
-  document.body.style.overflow = searchOpen.value ? 'hidden' : '';
+  mobileNavOpen.value = false;
 };
 
 const closeNavAndSearch = () => {
@@ -170,12 +179,12 @@ $primary-color: #007bff;
 $accent-color: #fe0000;
 $dark-color: #2c3e50;
 $white: #ffffff;
-$secondary-color: #6c757d;
 $light-color: #e9ecef;
+$mobile-menu-bg: #1a2b3c; 
 
 .header {
-  background: $dark-color;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: $white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   padding: clamp(0.5rem, 2vw, 0.75rem) 0;
   position: fixed;
   top: 0;
@@ -200,22 +209,13 @@ $light-color: #e9ecef;
     align-items: center;
     flex-shrink: 0;
 
-    img {
-      margin-right: clamp(0.3rem, 1vw, 0.5rem);
-      border-radius: 48%;
-      transition: transform 0.3s ease;
-
-      &:hover {
-        transform: scale(1.05);
-      }
-    }
-
     .sitename {
       font-size: clamp(1rem, 4vw, 1.8rem);
       font-weight: 800;
-      color: $white;
+      color: $dark-color;
       margin: 0;
       white-space: nowrap;
+      margin-left: clamp(0.3rem, 1vw, 0.5rem);
 
       span {
         color: $accent-color;
@@ -236,10 +236,6 @@ $light-color: #e9ecef;
       margin: 0;
       padding: 0;
 
-      &.show {
-        transform: translateX(0);
-      }
-
       li {
         margin-left: clamp(15px, 3vw, 25px);
 
@@ -248,10 +244,10 @@ $light-color: #e9ecef;
         }
 
         a, button {
-          color: $white;
+          color: $dark-color;
           text-decoration: none;
           font-size: clamp(0.9rem, 2.5vw, 1.1rem);
-          font-weight: 500;
+          font-weight: 550;
           padding: clamp(6px, 2vw, 8px) clamp(8px, 2vw, 12px);
           border-radius: 4px;
           transition: all 0.3s ease;
@@ -259,12 +255,13 @@ $light-color: #e9ecef;
           border: none;
           background: none;
           cursor: pointer;
+          display: inline-block;
 
           &:hover,
           &.active {
-            color: $white;
+            color: $dark-color;
             font-weight: 600;
-            background-color: rgba($primary-color, 0.2);
+            background-color: rgba($primary-color, 0.1);
           }
         }
 
@@ -276,6 +273,7 @@ $light-color: #e9ecef;
           font-weight: 700;
           border-radius: 25px;
           transition: all 0.3s ease;
+          margin-left: clamp(10px, 2vw, 15px);
 
           &:hover {
             background: darken($primary-color, 10%);
@@ -289,23 +287,6 @@ $light-color: #e9ecef;
             border-color: darken($primary-color, 10%);
           }
         }
-
-        .logout-btn {
-          background: $secondary-color;
-          color: $white !important;
-          border: 2px solid $secondary-color;
-          padding: clamp(8px, 2vw, 10px) clamp(15px, 3vw, 20px);
-          font-weight: 700;
-          border-radius: 25px;
-          transition: all 0.3s ease;
-
-          &:hover {
-            background: darken($secondary-color, 10%);
-            border-color: darken($secondary-color, 10%);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba($secondary-color, 0.3);
-          }
-        }
       }
     }
 
@@ -313,6 +294,7 @@ $light-color: #e9ecef;
       position: relative;
       display: flex;
       align-items: center;
+      margin-left: clamp(10px, 2vw, 15px);
 
       &.active {
         .search-input {
@@ -325,7 +307,7 @@ $light-color: #e9ecef;
           color: $accent-color;
           
           svg {
-            stroke: $accent-color;
+            stroke: $primary-color;
           }
         }
       }
@@ -337,7 +319,7 @@ $light-color: #e9ecef;
         padding: clamp(6px, 2vw, 8px) clamp(10px, 3vw, 12px);
         border: 1px solid $light-color;
         border-radius: 20px;
-        background: $white;
+        background: $light-color;
         color: $dark-color;
         font-size: clamp(0.8rem, 2vw, 0.9rem);
         transition: all 0.3s ease;
@@ -353,9 +335,8 @@ $light-color: #e9ecef;
       .search-toggle {
         background: none;
         border: none;
-        font-size: clamp(1.1rem, 3vw, 1.4rem);
         cursor: pointer;
-        color: $white;
+        color: $dark-color;
         transition: all 0.3s ease;
         padding: 8px;
         border-radius: 50%;
@@ -364,16 +345,16 @@ $light-color: #e9ecef;
         justify-content: center;
 
         svg {
-          stroke: $white;
+          stroke: $dark-color;
           transition: stroke 0.3s ease;
         }
 
         &:hover {
-          color: $accent-color;
-          background: rgba($white, 0.1);
+          color: $primary-color;
+          background: rgba($primary-color, 0.1);
           
           svg {
-            stroke: $accent-color;
+            stroke: $primary-color;
           }
         }
       }
@@ -382,9 +363,8 @@ $light-color: #e9ecef;
     .mobile-nav-toggle {
       background: none;
       border: none;
-      font-size: clamp(1.3rem, 4vw, 1.8rem);
       cursor: pointer;
-      color: $white;
+      color: $dark-color;
       transition: all 0.3s ease;
       margin-left: clamp(10px, 2vw, 15px);
       padding: 8px;
@@ -396,17 +376,17 @@ $light-color: #e9ecef;
       min-height: 44px;
 
       svg {
-        stroke: $white !important;
+        stroke: $dark-color;
         transition: all 0.3s ease;
       }
 
       &:hover {
-        color: $accent-color;
-        background: rgba($white, 0.1);
+        color: $primary-color;
+        background: rgba($primary-color, 0.1);
         transform: scale(1.05);
         
         svg {
-          stroke: $accent-color !important;
+          stroke: $primary-color;
         }
       }
 
@@ -424,8 +404,8 @@ $light-color: #e9ecef;
         height: 100vh;
         width: 100%;
         max-width: 300px;
-        background: $dark-color;
-        box-shadow: -4px 0 12px rgba(0, 0, 0, 0.2);
+        background: $mobile-menu-bg;
+        box-shadow: -4px 0 12px rgba(0, 0, 0, 0.3);
         padding: clamp(3rem, 10vw, 4rem) clamp(1rem, 3vw, 1.5rem);
         flex-direction: column;
         align-items: center;
@@ -449,72 +429,81 @@ $light-color: #e9ecef;
           }
 
           a, button {
-            display: block;
-            width: 100%;
-            max-width: 250px;
-            padding: clamp(10px, 3vw, 12px) clamp(12px, 3vw, 15px);
-            font-size: clamp(1rem, 3vw, 1.1rem);
-            text-align: center;
-            border-radius: 6px;
             color: $white;
 
             &:hover,
             &.active {
-              background: rgba($primary-color, 0.2);
+              background: rgba($primary-color, 0.3);
               color: $white;
             }
           }
 
           .my-account-btn, .logout-btn {
-            width: 100%;
-            max-width: 250px;
-            text-align: center;
-            margin-top: clamp(0.5rem, 2vw, 1rem);
-            padding: clamp(10px, 3vw, 12px) clamp(20px, 4vw, 25px);
-            font-size: clamp(0.9rem, 2.5vw, 1rem);
+            background: $primary-color;
+            border-color: $primary-color;
 
             &:hover {
               color: $white !important;
             }
           }
-
-          .my-account-btn:hover {
-            background: darken($primary-color, 10%);
-          }
-
-          .logout-btn:hover {
-            background: darken($secondary-color, 10%);
-          }
         }
       }
 
       .search-container {
+        margin-left: 0;
+
+        .search-input {
+          background: $white;
+          color: $dark-color;
+          border-color: $dark-color;
+        }
+
         &.active {
-          position: fixed;
-          top: clamp(3rem, 10vw, 4rem);
+          position: absolute;
+          top: 100%;
           left: 50%;
           transform: translateX(-50%);
           width: 90%;
           max-width: 300px;
           z-index: 1002;
+          background: $white;
+          padding: 8px 0;
+          border-radius: 0 0 8px 8px;
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 
           .search-input {
             width: 100%;
-            border-radius: 20px;
-            padding: clamp(8px, 2vw, 10px);
+            margin: 0 8px;
+            opacity: 1;
+            pointer-events: auto;
+            
+            &:focus {
+              border-color: $primary-color;
+            }
           }
 
           .search-toggle {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
+            display: none;
           }
         }
       }
-
+      
       .mobile-nav-toggle {
         display: block;
+        
+        svg {
+          stroke: $dark-color;
+        }
+        
+        &[aria-label*='Toggle mobile navigation'] {
+          &.d-xl-none {
+            color: $accent-color;
+            
+            svg {
+              stroke: $accent-color;
+            }
+          }
+        }
       }
     }
 
@@ -526,62 +515,6 @@ $light-color: #e9ecef;
       .logo {
         .sitename {
           font-size: clamp(1rem, 3.5vw, 1.2rem);
-        }
-      }
-
-      .mobile-nav-toggle {
-        font-size: clamp(1.2rem, 3.5vw, 1.5rem);
-        min-width: 40px;
-        min-height: 40px;
-        
-        svg {
-          width: 20px;
-          height: 20px;
-        }
-      }
-
-      .search-container {
-        .search-toggle {
-          font-size: clamp(1rem, 3vw, 1.3rem);
-          
-          svg {
-            width: 18px;
-            height: 18px;
-          }
-        }
-      }
-    }
-
-    @media (max-width: 480px) {
-      .container-fluid {
-        padding: 0 clamp(0.3rem, 1.5vw, 0.5rem);
-      }
-
-      .logo {
-        .sitename {
-          font-size: clamp(0.9rem, 3vw, 1rem);
-        }
-      }
-
-      .mobile-nav-toggle {
-        font-size: clamp(1.1rem, 3vw, 1.3rem);
-        min-width: 36px;
-        min-height: 36px;
-        
-        svg {
-          width: 18px;
-          height: 18px;
-        }
-      }
-
-      .search-container {
-        .search-toggle {
-          font-size: clamp(0.9rem, 2.5vw, 1.1rem);
-          
-          svg {
-            width: 16px;
-            height: 16px;
-          }
         }
       }
     }

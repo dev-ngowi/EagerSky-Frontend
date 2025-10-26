@@ -11,7 +11,7 @@
         <VaButton
           v-if="!addEditForm"
           icon="add"
-          color="#00A3E0"
+          color="#00A3E0" 
           size="small"
           class="px-4"
           @click="openForm(null, 'add')"

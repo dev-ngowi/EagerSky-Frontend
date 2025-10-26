@@ -1,4 +1,4 @@
-<template>
+i want the some form design to be designed on my rental application submission this is older design so update this code as the property owner designed "<template>
   <div class="rental-application">
     <div class="container">
       <div class="header">
@@ -320,121 +320,137 @@
         />
       </div>
 
-      <!-- Step 6: Payment -->
-    <div v-if="currentStep === 6" class="step-content">
-      <div class="step-header">
-        <h2 class="step-title">Payment</h2>
-        <div class="completion-status" v-if="completedSteps.includes(6)">
-          <span class="completed-badge">✓ Step Completed</span>
-          <small>Completed on {{ getCompletionDate(6) }}</small>
-        </div>
-      </div>
-      <PaymentForm
-        ref="paymentForm"
-        :payment="formData.payment"
-        :selected-term-period="selectedTermPeriod"
-        :payment-multiplier="paymentMultiplier"
-        :api-base-url="API_BASE_URL"
-        :auth-store="authStore"
-        :booking-id="formData.bookingId"
-        :property-id="propertyId"
-        :lease-id="formData.lease.id"
-        :lease="formData.lease"
-        :billing-address-id="formData.billing.address_id"
-        :user-id="getUserInfo()?.id"
-        :property-title="propertyTitle"
-        :property-image="propertyImage"
-        :property-location="propertyLocation"
-        :property-type="propertyType"
-        :room-number="formData.lease.room_number"
-        :room-id="formData.lease.room_id"
-        :is-room-based="isRoomSelectionRequired"
-        :property-info="paymentPropertyInfo"
-        @update:payment="updatePayment"
-        @payment-submitted="handlePaymentSubmission"
-        @payment-received="handlePaymentReceived"
-        @payment-completed="handlePaymentCompleted"
-        @payment-failed="handlePaymentFailure"
-        @payment-cancelled="handlePaymentCancelled"
-        @payment-timeout="handlePaymentTimeout"
-        @session-expired="handleSessionExpired"
-        @view-agreement="handleViewAgreement"
-      />
-      <div v-if="errors.billing_address_id" class="error-message">{{ errors.billing_address_id }}</div>
-      <div v-if="errors.lease_term_period" class="error-message">{{ errors.lease_term_period }}</div>
+<!-- Step 6: Payment -->
+<div v-if="currentStep === 6" class="step-content">
+  <div class="step-header">
+    <h2 class="step-title">Payment</h2>
+    <div class="completion-status" v-if="completedSteps.includes(6)">
+      <span class="completed-badge">✓ Step Completed</span>
+      <small>Completed on {{ getCompletionDate(6) }}</small>
     </div>
+  </div>
+  
+  <!-- Payment pending state -->
+  <div v-if="isPaymentPending && formData.payment.status !== 'received'">
+    <div class="info-card">
+      <h3>⏳ Waiting for Approval</h3>
+      <p>Your payment has been submitted and is pending approval. You'll be notified once it's reviewed.</p>
+      <div class="completion-status">
+        <span class="pending-badge">⏳ Payment Submitted - Awaiting Verification</span>
+        <small>Submitted on {{ getCompletionDate(6) }}</small>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Always show PaymentForm component except when payment is pending -->
+  <div v-else>
+    <PaymentForm
+      ref="paymentForm"
+      :payment="formData.payment"
+      :selected-term-period="selectedTermPeriod"
+      :payment-multiplier="paymentMultiplier"
+      :api-base-url="API_BASE_URL"
+      :auth-store="authStore"
+      :booking-id="formData.bookingId"
+      :property-id="propertyId"
+      :lease-id="formData.lease.id"
+      :lease="formData.lease"
+      :billing-address-id="formData.billing.address_id"
+      :user-id="getUserInfo()?.id"
+      :property-title="propertyTitle"
+      :property-image="propertyImage"
+      :property-location="propertyLocation"
+      :property-type="propertyType"
+      :room-number="formData.lease.room_number"
+      :room-id="formData.lease.room_id"
+      :is-room-based="isRoomSelectionRequired"
+      :property-info="paymentPropertyInfo"
+      @update:payment="updatePayment"
+      @payment-submitted="handlePaymentSubmission"
+      @payment-received="handlePaymentReceived"
+      @payment-completed="handlePaymentCompleted"
+      @payment-failed="handlePaymentFailure"
+      @payment-cancelled="handlePaymentCancelled"
+      @payment-timeout="handlePaymentTimeout"
+      @session-expired="handleSessionExpired"
+      @view-agreement="handleViewAgreement"
+    />
+    <div v-if="errors.billing_address_id" class="error-message">{{ errors.billing_address_id }}</div>
+    <div v-if="errors.lease_term_period" class="error-message">{{ errors.lease_term_period }}</div>
+  </div>
+</div>
 
         <!-- Step 7: Complete -->
         <div v-if="currentStep === 7" class="step-content">
-          <div class="success-animation">
-            <div class="checkmark">
-              <svg viewBox="0 0 52 52">
-                <path d="M14,27 L22,35 L38,19"></path>
-              </svg>
-            </div>
-            <h2 class="step-title">🎉 Application Complete!</h2>
-            <p class="step-description">Your rental application has been successfully submitted and your payment is being processed.</p>
+        <div class="success-animation">
+          <div class="checkmark">
+            <svg viewBox="0 0 52 52">
+              <path d="M14,27 L22,35 L38,19"></path>
+            </svg>
+          </div>
+          <h2 class="step-title">🎉 Application Complete!</h2>
+          <p class="step-description">Your rental application has been successfully submitted. Finalize by completing the submission.</p>
 
-            <div class="completion-summary">
-              <h3>📊 Process Summary</h3>
-              <div class="completion-list">
-                <div 
-                  v-for="step in totalSteps" 
-                  :key="step"
-                  class="completion-item"
-                  :class="{ 'completed': completedSteps.includes(step) }"
-                >
-                  <span class="completion-icon">
-                    {{ completedSteps.includes(step) ? '✅' : '⏳' }}
-                  </span>
-                  <span class="completion-label">{{ stepLabels[step - 1] }}</span>
-                  <span class="completion-time" v-if="completedSteps.includes(step)">
-                    {{ getCompletionDate(step) }}
-                  </span>
-                </div>
+          <div class="completion-summary">
+            <h3>📊 Process Summary</h3>
+            <div class="completion-list">
+              <div 
+                v-for="step in totalSteps" 
+                :key="step"
+                class="completion-item"
+                :class="{ 'completed': completedSteps.includes(step) }"
+              >
+                <span class="completion-icon">
+                  {{ completedSteps.includes(step) ? '✅' : '⏳' }}
+                </span>
+                <span class="completion-label">{{ stepLabels[step - 1] }}</span>
+                <span class="completion-time" v-if="completedSteps.includes(step)">
+                  {{ getCompletionDate(step) }}
+                </span>
               </div>
             </div>
+          </div>
 
-            <div class="info-card">
-              <h3>📄 Download Your Lease Agreement</h3>
-              <p>Your lease agreement is ready for download. Please save it for your records.</p>
-              <button class="btn btn-primary" @click="downloadLease" :disabled="loading">
-                <span v-if="loading && loadingText === 'Generating PDF...'">
-                  <span class="spinner"></span> Generating PDF...
-                </span>
-                <span v-else>Download Lease PDF</span>
-              </button>
-            </div>
+          <div class="info-card">
+            <h3>✅ Complete Submission</h3>
+            <p>Finalize your application by completing the submission.</p>
+            <button class="btn btn-primary" @click="completePayment" :disabled="loading">
+              <span v-if="loading">
+                <span class="spinner"></span> {{ loadingText }}
+              </span>
+              <span v-else>Complete Submission</span>
+            </button>
           </div>
         </div>
+      </div>
 
         <!-- Form Actions -->
-        <div class="form-actions" v-if="currentStep < 7">
-          <div class="action-info">
-            <small v-if="!completedSteps.includes(currentStep)" class="step-info">
-              Complete this step to continue to {{ stepLabels[currentStep] || 'next step' }}
-            </small>
-            <small v-else class="step-completed">
-              ✓ This step has been completed
-            </small>
-          </div>
-          
-          <button
-            class="btn btn-primary"
-            @click="handleNextStep"
-            :disabled="isNextButtonDisabled()"
-            :class="{
-              'btn-loading': loading,
-              'btn-completed': completedSteps.includes(currentStep) && currentStep < totalSteps
-            }"
-          >
-            <span v-if="loading" class="loading">
-              <span class="spinner"></span>
-              {{ loadingText }}
-            </span>
-            <span v-else>{{ nextButtonText }}</span>
-          </button>
-        </div>
+  <div class="form-actions" v-if="currentStep < 7">
+    <div class="action-info">
+      <small v-if="!completedSteps.includes(currentStep)" class="step-info">
+        Complete this step to continue to {{ stepLabels[currentStep] || 'next step' }}
+      </small>
+      <small v-else class="step-completed">
+        ✓ This step has been completed
+      </small>
+    </div>
+    
+    <button
+      class="btn btn-primary"
+      @click="handleNextStep"
+      :disabled="isNextButtonDisabled()"
+      :class="{
+        'btn-loading': loading,
+        'btn-completed': completedSteps.includes(currentStep) && currentStep < totalSteps
+      }"
+    >
+      <span v-if="loading" class="loading">
+        <span class="spinner"></span>
+        {{ loadingText }}
+      </span>
+      <span v-else>{{ nextButtonText }}</span>
+    </button>
+  </div>
       </div>
     </div>
   </div>
@@ -461,7 +477,7 @@ export default {
   },
   data() {
     return {
-      API_BASE_URL: import.meta.env.VITE_APP_API_BASE_URL || 'https://e1.japango.co.tz/api/v1',
+      API_BASE_URL: import.meta.env.VITE_APP_API_BASE_URL || 'https://app.eagersky.co.tz/api/v1',
       TOKEN_EXPIRY_DURATION: 24 * 60 * 60 * 1000,
       authStore: useAuthStore(),
       
@@ -474,6 +490,13 @@ export default {
       propertyCategory: '',
       availableRooms: null,
       isRoomSelectionRequired: true,
+      pollingInterval: null,
+      pollingTimeout: null,
+      isCheckingPayment: false,
+      pollingAttempts: 0,
+      maxPollingAttempts: 30, // Max 30 attempts (5 minutes at 10-second intervals)
+      requestTimeout: 10000, // 10 seconds timeout for individual API calls
+      abortController: null,
       
       // Application State
       currentStep: 1,
@@ -614,72 +637,38 @@ export default {
     isCurrentStepCompleted() {
       return this.completedSteps.includes(this.currentStep);
     },
+
 canAccessStep() {
-      return (step) => {
-        // Ensure step is a number
-        const stepNumber = Number(step);
-        if (isNaN(stepNumber) || !Number.isInteger(stepNumber) || stepNumber < 1 || stepNumber > this.totalSteps) {
-          console.warn('canAccessStep: Invalid step value', {
-            step,
-            converted: stepNumber,
-            timestamp: new Date().toISOString(),
-          });
-          return false;
-        }
-        console.log('canAccessStep: Checking access', {
-          step: stepNumber,
-          completedSteps: this.completedSteps,
-          maxReachedStep: this.maxReachedStep,
-          paymentStatus: this.formData.payment.status,
-          receiptUrl: this.formData.payment.receipt_url,
-          timestamp: new Date().toISOString(),
-        });
-        // Allow access to completed steps or current step
-        if (stepNumber <= this.maxReachedStep) return true;
-        // Block step 3 if application is pending or not approved
-        if (stepNumber === 3) {
-          const canAccess = (
-            this.completedSteps.includes(2) &&
-            this.formData.application.isApproved &&
-            !this.isApplicationPending
-          );
-          console.log('canAccessStep: Step 3 access check', {
-            isAccessible: canAccess,
-            isApproved: this.formData.application.isApproved,
-            isPending: this.isApplicationPending,
-            timestamp: new Date().toISOString(),
-          });
-          return canAccess;
-        }
-        // Modified: Allow step 7 if payment status is 'received' or 'completed' and receipt_url exists
-        // if (stepNumber === 7) {
-        //   const paymentFormState = this.$refs.paymentForm?.getFormState?.() || {};
-        //   const canAccess = (
-        //     this.completedSteps.includes(6) &&
-        //     (this.formData.payment.status === 'completed' || this.formData.payment.status === 'received') &&
-        //     this.formData.payment.receipt_url // Ensure receipt_url is present
-        //   );
-        //   console.log('canAccessStep: Step 7 access check', {
-        //     isAccessible: canAccess,
-        //     paymentStatus: this.formData.payment.status,
-        //     receiptUrl: this.formData.payment.receipt_url,
-        //     paymentFormState,
-        //     timestamp: new Date().toISOString(),
-        //   });
-        //   return canAccess;
-        // }
-        // Allow next step only if current step is completed
-        if (stepNumber === this.maxReachedStep + 1 && this.isCurrentStepCompleted) {
-          return true;
-        }
-        console.log('canAccessStep: Access denied', {
-          step: stepNumber,
-          isCurrentStepCompleted: this.isCurrentStepCompleted,
-          timestamp: new Date().toISOString(),
-        });
-        return false;
-      };
-    },
+  return (step) => {
+    const stepNumber = Number(step);
+    if (stepNumber <= this.maxReachedStep) return true;
+    if (stepNumber === 3) {
+      return (
+        this.completedSteps.includes(2) &&
+        this.formData.application.isApproved &&
+        !this.isApplicationPending
+      );
+    }
+    if (stepNumber === 7) {
+      const canAccess =
+        this.completedSteps.includes(6) &&
+        (this.formData.payment.status === 'completed' || 
+         this.formData.payment.status === 'received');
+      console.log('canAccessStep: Step 7 access check', {
+        isAccessible: canAccess,
+        paymentStatus: this.formData.payment.status,
+        completedSteps: this.completedSteps,
+        timestamp: new Date().toISOString(),
+      });
+      return canAccess;
+    }
+    if (stepNumber === this.maxReachedStep + 1 && this.isCurrentStepCompleted) {
+      return true;
+    }
+    return false;
+  };
+},
+    
 
     computedPropertyLocation() {
       let location = this.propertyLocation || 'Not specified';
@@ -737,15 +726,16 @@ canAccessStep() {
         case 6: {
           if (this.$refs.paymentForm) {
             const formState = this.$refs.paymentForm.getFormState();
-            if (formState.paymentCompleted && this.formData.payment.status === 'completed')
+            if (formState.paymentReceived && this.formData.payment.status === 'received')
               return 'Continue to Complete →';
-            if (formState.paymentReceived && formState.receiptUrl && this.formData.payment.status === 'received')
-              return 'Review Receipt →';
-            if (formState.paymentSubmitted && !formState.paymentCompleted)
-              return 'Processing Payment...';
+            if (formState.paymentSubmitted)
+              return 'Next to Complete Payments →';
             if (formState.loading) return 'Processing...';
           }
-          return 'Submit Payment →';
+          else {
+            return 'Submit Payment →';
+          }
+          
         }
         case 7: return 'Download Lease';
         default: return 'Next Step →';
@@ -807,6 +797,7 @@ canAccessStep() {
     this.stopPeriodicValidation();
     this.stopPollingApplicationStatus();
     this.stopPaymentPolling();
+    this.removeBrowserEventListeners();
   },
   methods: {
     // Helper Methods
@@ -1002,33 +993,39 @@ canAccessStep() {
       }
     },
     validateStepCompletion(step) {
-      switch (step) {
-        case 1: return !!this.formData.bookingId;
-        case 2: {
-          if (this.isApplicationPending) return true;
-          return !!(
-            this.formData.application.branch_id &&
-            this.formData.application.employment_status &&
-            this.formData.application.nida_number &&
-            this.formData.application.annual_income &&
-            this.formData.application.background_check_status &&
-            this.formData.application.credit_report_status
-          );
-        }
-        case 3: return !!(this.formData.lease.id && this.isLeaseCreated);
-        case 4: return !!this.formData.lease.is_signed;
-        case 5: return !!this.formData.billing.address_id;
-       case 6:
+  switch (step) {
+    case 1:
+      return !!this.formData.bookingId;
+    case 2:
+      if (this.isApplicationPending) return true;
+      return !!(
+        this.formData.application.branch_id &&
+        this.formData.application.employment_status &&
+        this.formData.application.nida_number &&
+        this.formData.application.annual_income &&
+        this.formData.application.background_check_status &&
+        this.formData.application.credit_report_status
+      );
+    case 3:
+      return !!(this.formData.lease.id && this.isLeaseCreated);
+    case 4:
+      return !!this.formData.lease.is_signed;
+    case 5:
+      return !!this.formData.billing.address_id;
+    case 6:
       return !!(
         this.formData.payment.id &&
         this.formData.payment.transaction_id &&
-        this.formData.payment.status === 'completed' &&
-        this.$refs.paymentForm.getFormState().receiptUrl
+        (this.formData.payment.status === 'completed' ||
+         (this.formData.payment.status === 'received' && this.formData.payment.receipt_url)) &&
+        this.$refs.paymentForm?.getFormState?.()?.receiptUrl
       );
-        case 7: return true;
-        default: return false;
-      }
-    },
+    case 7:
+      return true;
+    default:
+      return false;
+  }
+},
     checkAndMarkCompletedSteps() {
       for (let step = 1; step <= this.totalSteps; step++) {
         if (!this.completedSteps.includes(step) && this.validateStepCompletion(step)) {
@@ -1138,18 +1135,26 @@ canAccessStep() {
         this.showSwal('Initialization Error', 'Failed to initialize application. Please refresh the page.', 'error');
       }
     },
-    // Payment Methods
-      handlePaymentSubmission({ paymentId, transactionId, status }) {
-      this.formData.payment.id = paymentId;
-      this.formData.payment.transaction_id = transactionId;
-      this.isPaymentPending = true;
-      this.persistState();
-      this.showSwal('Payment Submitted', 'Your payment has been submitted and is being processed. Please wait for confirmation.', 'info');
-      // Start polling for payment status
-      this.startPaymentPolling();
-    },
+async handlePaymentSubmission({ paymentId, transactionId, status, receiptUrl, receiptNumber }) {
+  if (!paymentId) {
+    console.error('handlePaymentSubmission: No payment ID provided', {
+      timestamp: new Date().toISOString(),
+    });
+    this.showSwal('Error', 'Payment ID not provided by the server.', 'error');
+    this.isPaymentPending = false;
+    return;
+  }
 
-
+  this.formData.payment.id = paymentId;
+  this.formData.payment.transaction_id = transactionId;
+  this.formData.payment.status = status || 'pending';
+  this.formData.payment.receipt_url = receiptUrl || null;
+  this.formData.payment.receipt_number = receiptNumber || null;
+  this.isPaymentPending = true;
+  this.persistState();
+  this.showSwal('Payment Submitted', 'Your payment is being processed. Please wait for confirmation.', 'info');
+  this.startPaymentPolling();
+},
 
     handlePaymentCancelled() {
       this.isPaymentPending = false;
@@ -1160,108 +1165,182 @@ canAccessStep() {
     },
 
 
-    startPaymentPolling() {
-      // Clear any existing polling
-      this.stopPaymentPolling();
-      this.pollingInterval = setInterval(() => {
-        this.checkPaymentStatus();
-      }, 5000); // Poll every 5 seconds
+startPaymentPolling() {
+      if (this.pollingInterval) {
+        console.log('startPaymentPolling: Polling already active', { timestamp: new Date().toISOString() });
+        return;
+      }
 
-      // Set a timeout to stop polling after 5 minutes
+      this.pollingAttempts = 0;
+      this.stopPaymentPolling();
+
+      this.pollingInterval = setInterval(() => {
+        this.pollingAttempts++;
+        if (this.pollingAttempts > this.maxPollingAttempts) {
+          this.stopPaymentPolling();
+          this.showSwal('Timeout', 'Payment verification timed out. Please try again or contact support.', 'error');
+          this.isPaymentPending = false;
+          this.persistState();
+          return;
+        }
+        this.checkPaymentStatus();
+      }, 10000);
+
       this.pollingTimeout = setTimeout(() => {
         this.stopPaymentPolling();
         this.showSwal('Timeout', 'Payment verification timed out. Please try again or contact support.', 'error');
         this.isPaymentPending = false;
         this.persistState();
-      }, 300000); // 5 minutes
+      }, 300000);
+
+      console.log('startPaymentPolling: Started', {
+        interval: 10000,
+        maxAttempts: this.maxPollingAttempts,
+        timestamp: new Date().toISOString(),
+      });
     },
 
 async checkPaymentStatus() {
-      if (!this.formData.payment.id || !this.isPaymentPending || this.isUpdatingPayment) {
-        console.warn('checkPaymentStatus: Skipping status check', {
-          paymentId: this.formData.payment.id,
-          isPaymentPending: this.isPaymentPending,
-          isUpdatingPayment: this.isUpdatingPayment,
-          timestamp: new Date().toISOString(),
-        });
-        return;
-      }
-      try {
-        this.loading = true;
-        this.loadingText = 'Checking payment status...';
-        const response = await makeRequest({
-          method: 'GET',
-          url: `${this.API_BASE_URL}/v1/payments/${this.formData.payment.id}/status`,
-          headers: { Authorization: `Bearer ${this.authStore.token}` },
-          requiresAuth: true,
-        });
-        const paymentData = response.data?.data;
-        console.log('checkPaymentStatus: Payment status response', {
-          status: paymentData?.status,
-          paymentId: this.formData.payment.id,
-          response: paymentData,
-          timestamp: new Date().toISOString(),
-        });
-        if (!paymentData) {
-          throw new Error('No payment data returned from API');
-        }
-        if (paymentData.status === 'completed') {
-          this.stopPaymentPolling();
-          this.handlePaymentCompleted({
-            paymentId: paymentData.id,
-            transactionId: paymentData.transaction_id,
-            status: paymentData.status,
-            receiptUrl: paymentData.receipt_url || this.formData.payment.receipt_url,
-            receiptNumber: paymentData.receipt_number || this.formData.payment.receipt_number,
-          });
-        } else if (paymentData.status === 'received' && paymentData.receipt_url) {
-          this.handlePaymentReceived({
-            paymentId: paymentData.id,
-            transactionId: paymentData.transaction_id,
-            status: paymentData.status,
-            receiptUrl: paymentData.receipt_url,
-            receiptNumber: paymentData.receipt_number,
-          });
-        } else if (paymentData.status === 'failed') {
-          this.stopPaymentPolling();
-          this.handlePaymentFailure(new Error(paymentData.message || 'Payment failed'));
-        } else if (paymentData.status === 'cancelled') {
-          this.stopPaymentPolling();
-          this.handlePaymentCancelled();
-        } else if (paymentData.status === 'timeout') {
-          this.stopPaymentPolling();
-          this.handlePaymentTimeout();
-        } else {
-          console.log('checkPaymentStatus: Payment still pending', {
-            paymentId: this.formData.payment.id,
-            status: paymentData.status,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      } catch (error) {
-        console.error('checkPaymentStatus: Payment status check failed', {
-          error: error.message,
-          paymentId: this.formData.payment.id,
-          timestamp: new Date().toISOString(),
-        });
-        this.showSwal('Error', 'Failed to check payment status. Please try again or contact support.', 'error');
-      } finally {
-        this.loading = false;
-        this.loadingText = '';
-      }
-    },
+  if (!this.formData.payment.id || !this.isPaymentPending || this.isUpdatingPayment) {
+    console.warn('checkPaymentStatus: Skipping', {
+      paymentId: this.formData.payment.id,
+      isPaymentPending: this.isPaymentPending,
+      isUpdatingPayment: this.isUpdatingPayment,
+      timestamp: new Date().toISOString(),
+    });
+    this.stopPaymentPolling();
+    if (!this.formData.payment.id) {
+      this.showSwal('Error', 'No payment ID found. Please try submitting the payment again.', 'error');
+      this.isPaymentPending = false;
+      this.persistState();
+    }
+    return;
+  }
+
+  this.isUpdatingPayment = true;
+  this.loading = true;
+  this.loadingText = `Checking payment status... Attempt ${this.pollingAttempts}/${this.maxPollingAttempts}`;
+
+  try {
+    this.abortController = new AbortController();
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timed out')), this.requestTimeout);
+    });
+
+    const requestPromise = makeRequest({
+      method: 'GET',
+      url: `${this.API_BASE_URL}/v1/payments/${this.formData.payment.id}/status`,
+      headers: { Authorization: `Bearer ${this.authStore.token}` },
+      requiresAuth: true,
+      signal: this.abortController.signal,
+    });
+
+    const response = await Promise.race([requestPromise, timeoutPromise]);
+    const paymentData = response.data?.data;
+
+    if (!paymentData) throw new Error('No payment data returned');
+
+    console.log('checkPaymentStatus: Response', {
+      status: paymentData?.status,
+      paymentId: this.formData.payment.id,
+      receiptUrl: paymentData?.receipt_url,
+      attempt: this.pollingAttempts,
+      timestamp: new Date().toISOString(),
+    });
+
+    this.formData.payment.status = paymentData.status;
+    this.formData.payment.receipt_url = paymentData.receipt_url || this.formData.payment.receipt_url;
+    this.formData.payment.receipt_number = paymentData.receipt_number || this.formData.payment.receipt_number;
+    this.persistState();
+
+    if (paymentData.status === 'completed') {
+      this.stopPaymentPolling();
+      this.handlePaymentCompleted({
+        paymentId: paymentData.id,
+        transactionId: paymentData.transaction_id,
+        status: paymentData.status,
+        receiptUrl: paymentData.receipt_url,
+        receiptNumber: paymentData.receipt_number,
+      });
+    } else if (paymentData.status === 'received' && paymentData.receipt_url) {
+      this.handlePaymentReceived({
+        paymentId: paymentData.id,
+        transactionId: paymentData.transaction_id,
+        status: paymentData.status,
+        receiptUrl: paymentData.receipt_url,
+        receiptNumber: paymentData.receipt_number,
+      });
+    } else if (paymentData.status === 'failed') {
+      this.stopPaymentPolling();
+      this.handlePaymentFailure(new Error(paymentData.message || 'Payment failed'));
+    } else if (paymentData.status === 'cancelled') {
+      this.stopPaymentPolling();
+      this.handlePaymentCancelled();
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.log('checkPaymentStatus: Aborted', {
+        paymentId: this.formData.payment.id,
+        attempt: this.pollingAttempts,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    console.error('checkPaymentStatus: Failed', {
+      error: error.message,
+      paymentId: this.formData.payment.id,
+      attempt: this.pollingAttempts,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (error.response?.status === 404) {
+      this.stopPaymentPolling();
+      this.showSwal('Error', 'Payment not found. Please try submitting the payment again.', 'error');
+      this.isPaymentPending = false;
+      this.formData.payment.id = null;
+      this.persistState();
+      return;
+    }
+
+    if (this.pollingAttempts < this.maxPollingAttempts) {
+      const delay = Math.min(1000 * Math.pow(2, this.pollingAttempts), 30000);
+      console.log('checkPaymentStatus: Retrying', {
+        delay,
+        attempt: this.pollingAttempts,
+        timestamp: new Date().toISOString(),
+      });
+      await new Promise(resolve => setTimeout(resolve, delay));
+    } else {
+      this.stopPaymentPolling();
+      this.showSwal('Error', 'Failed to check payment status. Please try again or contact support.', 'error');
+      this.isPaymentPending = false;
+      this.formData.payment.id = null;
+      this.persistState();
+    }
+  } finally {
+    this.isUpdatingPayment = false;
+    this.loading = false;
+    this.loadingText = '';
+  }
+},
 
     stopPaymentPolling() {
-      if (this.pollingInterval) {
-        clearInterval(this.pollingInterval);
-        this.pollingInterval = null;
-      }
-      if (this.pollingTimeout) {
-        clearTimeout(this.pollingTimeout);
-        this.pollingTimeout = null;
-      }
-      console.log('stopPaymentPolling: Polling stopped', { timestamp: new Date().toISOString() });
-    },
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
+    if (this.pollingTimeout) {
+      clearTimeout(this.pollingTimeout);
+      this.pollingTimeout = null;
+    }
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+    this.pollingAttempts = 0;
+    console.log('stopPaymentPolling: Polling stopped', { timestamp: new Date().toISOString() });
+  },
 
     handlePaymentSuccess(paymentData) {
       this.isPaymentPending = false;
@@ -1281,30 +1360,33 @@ async checkPaymentStatus() {
         'success'
       );
     },
+handlePaymentCompleted({ paymentId, transactionId, status, receiptUrl, receiptNumber }) {
+  console.log('handlePaymentCompleted:', {
+    paymentId,
+    transactionId,
+    status,
+    receiptUrl,
+    receiptNumber,
+    timestamp: new Date().toISOString(),
+  });
+  this.formData.payment.id = paymentId;
+  this.formData.payment.transaction_id = transactionId;
+  this.formData.payment.status = 'completed'; // Normalize to 'completed' for consistency
+  this.formData.payment.receipt_url = receiptUrl;
+  this.formData.payment.receipt_number = receiptNumber || `RCP-${Date.now()}`;
+  this.isPaymentPending = false;
 
-    handlePaymentCompleted({ paymentId, transactionId, status, receiptUrl, receiptNumber }) {
-      console.log('Payment completed in parent:', { paymentId, transactionId, status, receiptUrl, receiptNumber });
-      this.formData.payment.id = paymentId;
-      this.formData.payment.transaction_id = transactionId;
-      this.formData.payment.status = 'completed';
-      this.formData.payment.receipt_url = receiptUrl;
-      this.formData.payment.receipt_number = receiptNumber;
-      this.isPaymentPending = false;
-      
-      // Mark step 6 as completed
-      if (!this.completedSteps.includes(6)) {
-        this.markStepCompleted(6);
-      }
-      
-      // Advance to step 7 only if status is 'completed'
-      if (this.formData.payment.status === 'completed') {
-        this.currentStep = 7;
-        this.maxReachedStep = Math.max(this.maxReachedStep, 7);
-      }
-      this.persistState();
-      
-      this.showSwal('Payment Completed', 'Your payment has been successfully processed!', 'success');
-    },
+  if (!this.completedSteps.includes(6)) {
+    this.markStepCompleted(6);
+  }
+
+  this.currentStep = 7;
+  this.maxReachedStep = Math.max(this.maxReachedStep, 7);
+  this.persistState();
+  this.stopPaymentPolling(); // Stop polling since child already handles it on status change
+  this.showSwal('Payment Completed', 'Your payment has been successfully processed and receipt downloaded.', 'success');
+},
+
 
     handlePaymentFailure(error) {
       this.isPaymentPending = false;
@@ -1314,28 +1396,112 @@ async checkPaymentStatus() {
       this.persistState();
     },
 
-    handlePaymentReceived({ paymentId, transactionId, status, receiptUrl, receiptNumber }) {
-      this.isPaymentPending = false;
-      this.formData.payment.id = paymentId;
-      this.formData.payment.transaction_id = transactionId;
-      this.formData.payment.status = status;
-      this.formData.payment.receipt_url = receiptUrl;
-      this.formData.payment.receipt_number = receiptNumber;
-      
-      // Mark step 6 as completed
-      if (!this.completedSteps.includes(6)) {
-        this.markStepCompleted(6);
-      }
-      
-      // Advance to step 7 only if status is 'completed'
-      if (this.formData.payment.status === 'completed') {
-        this.currentStep = 7;
-        this.maxReachedStep = Math.max(this.maxReachedStep, 7);
-      }
-      this.persistState();
-      
-      this.showSwal('Payment Received', 'Your payment has been received. You can now view your receipt.', 'info');
-    },
+async handlePaymentReceived({ paymentId, transactionId, status, receiptUrl, receiptNumber }) {
+  console.log('handlePaymentReceived:', { paymentId, transactionId, status, receiptUrl, receiptNumber });
+  this.formData.payment.id = paymentId;
+  this.formData.payment.transaction_id = transactionId;
+  this.formData.payment.status = status;
+  this.formData.payment.receipt_url = receiptUrl;
+  this.formData.payment.receipt_number = receiptNumber || `RCP-${Date.now()}`;
+  this.isPaymentPending = false;
+
+  // Ensure Step 6 is marked as completed
+  if (!this.completedSteps.includes(6)) {
+    this.markStepCompleted(6);
+  }
+
+  this.currentStep = 7;
+  this.maxReachedStep = Math.max(this.maxReachedStep, 7);
+  this.persistState();
+  this.stopPaymentPolling();
+
+  // Automatically trigger receipt download
+  try {
+    if (!this.formData.payment.receipt_url) {
+      console.log('[DEBUG] No receipt URL, generating receipt');
+      await this.generateReceipt();
+    }
+    await this.downloadReceipt();
+    this.showSwal('Payment Received', 'Payment receipt has been generated and downloaded.', 'success');
+  } catch (error) {
+    console.error('[DEBUG] downloadReceipt error:', error);
+    this.showSwal('Download Error', 'Payment received, but failed to download receipt. Please try downloading manually.', 'warning');
+  }
+},
+
+async generateReceipt() {
+  this.loading = true;
+  this.loadingText = 'Generating receipt...';
+  try {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+    const receiptNum = this.formData.payment.receipt_number || `RCP-${Date.now()}`;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    let yPosition = 20;
+
+    // Simplified receipt content
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('PAYMENT RECEIPT', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 10;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Receipt No: ${receiptNum}`, margin, yPosition);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - margin, yPosition, { align: 'right' });
+    yPosition += 10;
+    doc.text(`Transaction ID: ${this.formData.payment.transaction_id || 'N/A'}`, margin, yPosition);
+    yPosition += 10;
+    doc.text(`Amount: TZS ${this.getTotalAmount().toLocaleString()}`, margin, yPosition);
+
+    this.formData.payment.receipt_url = doc.output('datauristring');
+    this.formData.payment.receipt_number = receiptNum;
+    console.log('[DEBUG] Receipt generated:', {
+      receiptNumber: receiptNum,
+      receiptUrl: this.formData.payment.receipt_url ? 'data:application/pdf;base64,...(truncated)' : null,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[DEBUG] generateReceipt error:', error);
+    this.formData.payment.receipt_url = 'https://example.com/fallback-receipt.pdf';
+    this.showSwal('Error', 'Failed to generate receipt. Using fallback URL.', 'warning');
+  } finally {
+    this.loading = false;
+    this.loadingText = '';
+  }
+},
+
+async downloadReceipt() {
+  if (!this.validateSession()) {
+    this.showSwal('Session Expired', 'Please log in again.', 'error');
+    return;
+  }
+  if (!this.formData.payment.receipt_url) {
+    this.showSwal('Error', 'No receipt URL found.', 'error');
+    return;
+  }
+  this.loading = true;
+  this.loadingText = 'Generating receipt...';
+  try {
+    const receiptWindow = window.open(this.formData.payment.receipt_url, '_blank');
+    if (!receiptWindow) {
+      throw new Error('Failed to open receipt. Please allow pop-ups.');
+    }
+    this.showSwal('Receipt Downloaded', 'Receipt opened in a new tab.', 'success');
+  } catch (error) {
+    console.error('downloadReceipt error:', error);
+    this.showSwal('Error', 'Failed to download receipt.', 'error');
+    throw error;
+  } finally {
+    this.loading = false;
+    this.loadingText = '';
+  }
+},
+    
 
     handleViewAgreement() {
       if (this.formData.lease.id && this.formData.payment.receipt_url) {
@@ -1739,21 +1905,28 @@ async fetchTermPeriods(propertyId) {
       }
     },
     updatePayment(updatedPayment) {
-        if (JSON.stringify(this.formData.payment) === JSON.stringify(updatedPayment)) return;
-        Object.assign(this.formData.payment, {
-          amount: updatedPayment.amount,
-          amount_display: updatedPayment.amount_display,
-          payment_method_id: updatedPayment.payment_method_id,
-          payment_type_id: updatedPayment.payment_type_id,
-          payment_details: { ...updatedPayment.payment_details },
-          room_id: updatedPayment.room_id,
-          room_number: updatedPayment.room_number,
-          base_amount: updatedPayment.base_amount,
-          service_charge: updatedPayment.service_charge,
-          transaction_id: updatedPayment.transaction_id
-        });
-        this.persistState();
-      },
+  if (JSON.stringify(this.formData.payment) === JSON.stringify(updatedPayment)) return;
+  
+  // Create a new object to avoid reference issues
+  this.formData.payment = { ...this.formData.payment, ...updatedPayment };
+  
+  // Ensure receipt URL and number are properly set
+  if (updatedPayment.receipt_url) {
+    this.formData.payment.receipt_url = updatedPayment.receipt_url;
+  }
+  if (updatedPayment.receipt_number) {
+    this.formData.payment.receipt_number = updatedPayment.receipt_number;
+  }
+  
+  this.persistState();
+  
+  // If payment status is received and receipt URL is available, ensure the PaymentForm shows the receipt step
+  if (this.formData.payment.status === 'received' && this.formData.payment.receipt_url && this.$refs.paymentForm) {
+    this.$nextTick(() => {
+      this.$refs.paymentForm.currentStep = 'receipt';
+    });
+  }
+},
     
      async fetchAvailableRooms() {
         if (!this.propertyId) {
@@ -2103,112 +2276,113 @@ async fetchTermPeriods(propertyId) {
       }
     },
    
-    // Modified: Handle transition to Step 7 when payment is received
-    async handleNextStep() {
-      if (this.loading || this.isStepLocked) return;
-      if (this.currentStep === 4) {
-        if (!this.formData.lease.is_signed) {
-          await this.initiateLeaseSigning();
-          return;
-        }
-      }
-      if (this.currentStep === 2) {
-        if (!this.formData.application.id) {
-          const success = await this.submitRentalApplication();
-          if (!success) {
-            this.showSwal('Submission Failed', 'Failed to submit application. Please correct errors and try again.', 'error');
-            return;
-          }
-          if (this.isApplicationPending || !this.formData.application.isApproved) {
-            this.showSwal('Pending Approval', 'Your application is still pending approval. Please wait.', 'warning');
-            return;
-          }
-        } else if (this.isApplicationPending || !this.formData.application.isApproved) {
-          await this.checkApplicationStatus();
-          if (this.isApplicationPending || !this.formData.application.isApproved) {
-            this.showSwal('Pending Approval', 'Your application is still pending approval. Please wait.', 'warning');
-            return;
-          }
-        }
-      }
-      if (this.currentStep === 3) {
-        if (!this.isLeaseCreated) {
-          if (!this.$refs.leaseCreator || !this.$refs.leaseCreator.validateLeaseForm()) {
-            this.showSwal('Validation Error', 'Please correct all errors in the lease form', 'error');
-            return;
-          }
-          if (this.isRoomSelectionRequired && !this.formData.lease.room_id) {
-            this.errors.lease_room_id = 'Please select a room for the lease';
-            this.showSwal('Validation Error', this.errors.lease_room_id, 'error');
-            return;
-          }
-          this.loading = true;
-          this.loadingText = 'Creating lease...';
-          try {
-            const success = await this.$refs.leaseCreator.submitLease();
-            if (success) {
-              this.isLeaseCreated = true;
-              this.showSwal('Lease Created', 'Your lease has been successfully created.', 'success');
-            } else {
-              this.showSwal('Lease Creation Failed', 'Please check the lease form and try again.', 'error');
-              return;
-            }
-          } catch (error) {
-            this.showSwal('Lease Creation Error', 'Failed to create lease. Please try again.', 'error');
-            return;
-          } finally {
-            this.loading = false;
-            this.loadingText = '';
-          }
-        }
-      }
-      if (this.currentStep === 6 && this.$refs.paymentForm) {
-        const formState = this.$refs.paymentForm.getFormState();
-        if (formState.paymentReceived && formState.receiptUrl && this.formData.payment.status === 'received') {
-          this.markStepCompleted(6);
-          this.currentStep = 7;
-          this.maxReachedStep = Math.max(this.maxReachedStep, 7);
-          this.persistState();
-          this.showSwal('Proceeding to Complete', 'Payment received. Proceeding to final step.', 'success');
-          return;
-        }
-        if (formState.paymentCompleted && this.formData.payment.status === 'completed' && formState.receptUrl) {
-          this.markStepCompleted(6);
-          this.currentStep = 7;
-          this.maxReachedStep = Math.max(this.maxReachedStep, 7);
-          this.persistState();
-          this.showSwal('Payment Completed', 'Proceeding to final step.', 'success');
-          return;
-        }
-        if (!formState.paymentSubmitted) {
-          if (!this.$refs.paymentForm.validateForm()) {
-            this.showSwal('Validation Error', 'Please correct the payment form errors.', 'error');
-            return;
-          }
-          const success = await this.$refs.paymentForm.submitFromParent();
-          if (!success) {
-            this.showSwal('Payment Error', 'Failed to process payment. Please try again.', 'error');
-            return;
-          }
-          this.showSwal('Payment Processing', 'Payment is being processed. Please wait for confirmation.', 'info');
-          return;
-        } else if (formState.paymentSubmitted && !formState.paymentReceived) {
-          this.showSwal('Payment Pending', 'Payment is pending admin verification.', 'info');
-          return;
-        }
-      }
-      if (!this.validateCurrentStep()) {
-        this.shakeCurrentStep();
+  async handleNextStep() {
+  if (this.loading || this.isStepLocked) return;
+
+  if (this.currentStep === 4) {
+    if (!this.formData.lease.is_signed) {
+      await this.initiateLeaseSigning();
+      return;
+    }
+  }
+  if (this.currentStep === 2) {
+    if (!this.formData.application.id) {
+      const success = await this.submitRentalApplication();
+      if (!success) {
+        this.showSwal('Submission Failed', 'Failed to submit application. Please correct errors and try again.', 'error');
         return;
       }
-      const nextStep = this.currentStep + 1;
-      await this.prepareStepData(nextStep);
-      this.markStepCompleted(this.currentStep);
-      this.currentStep = nextStep;
-      this.maxReachedStep = Math.max(this.maxReachedStep, nextStep);
+      if (this.isApplicationPending || !this.formData.application.isApproved) {
+        this.showSwal('Pending Approval', 'Your application is still pending approval. Please wait.', 'warning');
+        return;
+      }
+    } else if (this.isApplicationPending || !this.formData.application.isApproved) {
+      await this.checkApplicationStatus();
+      if (this.isApplicationPending || !this.formData.application.isApproved) {
+        this.showSwal('Pending Approval', 'Your application is still pending approval. Please wait.', 'warning');
+        return;
+      }
+    }
+  }
+  if (this.currentStep === 3) {
+    if (!this.isLeaseCreated) {
+      if (!this.$refs.leaseCreator || !this.$refs.leaseCreator.validateLeaseForm()) {
+        this.showSwal('Validation Error', 'Please correct all errors in the lease form', 'error');
+        return;
+      }
+      if (this.isRoomSelectionRequired && !this.formData.lease.room_id) {
+        this.errors.lease_room_id = 'Please select a room for the lease';
+        this.showSwal('Validation Error', this.errors.lease_room_id, 'error');
+        return;
+      }
+      this.loading = true;
+      this.loadingText = 'Creating lease...';
+      try {
+        const success = await this.$refs.leaseCreator.submitLease();
+        if (success) {
+          this.isLeaseCreated = true;
+          this.showSwal('Lease Created', 'Your lease has been successfully created.', 'success');
+        } else {
+          this.showSwal('Lease Creation Failed', 'Please check the lease form and try again.', 'error');
+          return;
+        }
+      } catch (error) {
+        this.showSwal('Lease Creation Error', 'Failed to create lease. Please try again.', 'error');
+        return;
+      } finally {
+        this.loading = false;
+        this.loadingText = '';
+      }
+    }
+  }
+  if (this.currentStep === 6 && this.$refs.paymentForm) {
+    const formState = this.$refs.paymentForm.getFormState();
+    if ((formState.paymentCompleted || this.formData.payment.status === 'completed' || this.formData.payment.status === 'received') && formState.receiptUrl) {
+      this.markStepCompleted(6);
+      this.currentStep = 7;
+      this.maxReachedStep = Math.max(this.maxReachedStep, 7);
       this.persistState();
-    },
-    
+      this.showSwal('Payment Completed', 'Proceeding to final step.', 'success');
+      return;
+    }
+    if (formState.paymentSubmitted && !formState.paymentCompleted) {
+      this.showSwal('Payment Pending', 'Payment is pending verification.', 'info');
+      return;
+    }
+    if (!formState.paymentSubmitted) {
+      if (!this.$refs.paymentForm.validateForm()) {
+        this.showSwal('Validation Error', 'Please correct payment form errors.', 'error');
+        return;
+      }
+      try {
+        const success = await this.$refs.paymentForm.submitFromParent();
+        if (!success) {
+          this.showSwal('Payment Error', 'Failed to process payment. Please check errors and try again.', 'error');
+          return;
+        }
+        this.showSwal('Payment Submitted', 'Payment is being processed. Awaiting verification.', 'info');
+      } catch (error) {
+        console.error('[DEBUG] Payment submission error:', {
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        });
+        this.showSwal('Payment Error', 'An unexpected error occurred during payment submission.', 'error');
+      }
+      return;
+    }
+  }
+
+  if (!this.validateCurrentStep()) {
+    this.shakeCurrentStep();
+    return;
+  }
+  const nextStep = this.currentStep + 1;
+  await this.prepareStepData(nextStep);
+  this.markStepCompleted(this.currentStep);
+  this.currentStep = nextStep;
+  this.maxReachedStep = Math.max(this.maxReachedStep, nextStep);
+  this.persistState();
+},
     getCompletionDate(step) {
       const timestamp = this.stepCompletionTimestamps[step];
       if (!timestamp) return 'N/A';
@@ -2220,6 +2394,46 @@ async fetchTermPeriods(propertyId) {
         hour: '2-digit',
         minute: '2-digit',
       });
+    },
+
+// Updated: Confirm payment
+    async confirmPayment() {
+      if (!this.validateSession()) return;
+      if (this.formData.payment.status !== 'received' || !this.formData.payment.receipt_url) {
+        this.showSwal('Error', 'Cannot confirm payment. Receipt not available.', 'error');
+        return;
+      }
+
+      this.loading = true;
+      this.loadingText = 'Confirming payment...';
+
+      try {
+        const response = await makeRequest({
+          method: 'POST',
+          url: `${this.API_BASE_URL}/v1/payments/${this.formData.payment.id}/confirm`,
+          headers: { Authorization: `Bearer ${this.authStore.token}`, 'Content-Type': 'application/json' },
+          requiresAuth: true,
+        });
+
+        if (response.status === 200 || response.status === 201) {
+          this.formData.payment.status = 'completed';
+          if (!this.completedSteps.includes(6)) {
+            this.markStepCompleted(6);
+          }
+          this.currentStep = 7;
+          this.maxReachedStep = Math.max(this.maxReachedStep, 7);
+          this.persistState();
+          this.showSwal('Payment Confirmed', 'Proceeding to final step.', 'success');
+        } else {
+          throw new Error('Failed to confirm payment.');
+        }
+      } catch (error) {
+        console.error('confirmPayment:', { error: error.message, timestamp: new Date().toISOString() });
+        this.showSwal('Error', this.handleError(error, 'Failed to confirm payment.'), 'error');
+      } finally {
+        this.loading = false;
+        this.loadingText = '';
+      }
     },
     
     // Enhanced step preparation
@@ -2255,33 +2469,6 @@ async prepareStepData(step) {
           this.propertyId = booking?.property_id;
           if (!this.propertyId) throw new Error("Property ID is required");
         }
-        // Validate room_id
-        if (!this.formData.lease.room_id) {
-          const booking = this.confirmedBookings.find(b => b.id === this.formData.bookingId);
-          if (booking && booking.room_id) {
-            this.formData.lease.room_id = booking.room_id;
-            this.formData.lease.room_number = booking.room_number;
-            this.formData.payment.room_id = booking.room_id;
-            this.formData.payment.room_number = booking.room_number;
-            console.log('prepareStepData: Set room_id from booking', {
-              roomId: booking.room_id,
-              roomNumber: booking.room_number,
-              timestamp: new Date().toISOString(),
-            });
-          } else {
-            throw new Error("No valid room_id found for the selected booking");
-          }
-        }
-        // Verify room_id is still available
-        await this.fetchAvailableRooms();
-        const selectedRoom = this.availableRooms.find(room => room.id === this.formData.lease.room_id);
-        if (!selectedRoom || !selectedRoom.is_available) {
-          this.formData.lease.room_id = null;
-          this.formData.lease.room_number = null;
-          this.formData.payment.room_id = null;
-          this.formData.payment.room_number = null;
-          throw new Error("Selected room is no longer available. Please select a new room.");
-        }
         await Promise.all([
           this.fetchTermPeriods(this.propertyId),
           this.fetchPropertyDetails(this.propertyId),
@@ -2309,9 +2496,7 @@ async prepareStepData(step) {
             throw new Error("Selected term period not found");
           }
         }
-        console.log("prepareStepData: Payment step prepared", {
-          roomId: this.formData.lease.room_id,
-          roomNumber: this.formData.lease.room_number,
+        console.log("prepareStepData: Payment amount synced", {
           rentAmount: this.formData.lease.rent_amount,
           paymentAmount: this.formData.payment.amount,
           timestamp: new Date().toISOString(),
@@ -2578,25 +2763,15 @@ async prepareStepData(step) {
         this.errors.bookingId = 'Booking ID is required';
         isValid = false;
       }
+      
       if (!this.formData.lease.id) {
         this.errors.lease_id = 'Lease ID is required';
         isValid = false;
       }
+      
       if (!this.formData.billing.address_id) {
         this.errors.billing_address_id = 'Billing address is required';
         isValid = false;
-      }
-      // Add room_id validation
-      if (!this.formData.lease.room_id) {
-        this.errors.lease_room_id = 'Room selection is required for payment';
-        isValid = false;
-      } else {
-        // Verify room_id matches booking
-        const booking = this.confirmedBookings.find(b => b.id === this.formData.bookingId);
-        if (booking && booking.room_id !== this.formData.lease.room_id) {
-          this.errors.lease_room_id = 'Selected room does not match the booking. Please reselect a booking.';
-          isValid = false;
-        }
       }
       break;
   }
@@ -3050,38 +3225,23 @@ async submitPayment() {
   if (!this.validateSession()) return;
   if (!this.formData.bookingId) {
     this.errors.bookingId = 'Booking ID is missing. Please select a booking in Step 1.';
-    this.errorMessage = this.errors.bookingId;
-    this.showSwal('Missing Booking', this.errorMessage, 'error');
+    this.showSwal('Missing Booking', this.errors.bookingId, 'error');
     this.currentStep = 1;
     return;
   }
-  // Verify room_id matches booking
-  const booking = this.confirmedBookings.find(b => b.id === this.formData.bookingId);
-  if (!booking || !booking.room_id) {
-    this.errors.lease_room_id = 'Selected booking does not contain valid room information.';
-    this.errorMessage = this.errors.lease_room_id;
-    this.showSwal('Invalid Room', this.errorMessage, 'error');
-    this.currentStep = 1;
+
+  if (!this.$refs.paymentForm.validateForm()) {
+    this.showSwal('Validation Error', 'Please correct payment form errors.', 'error');
     return;
   }
-  if (this.formData.lease.room_id !== booking.room_id) {
-    console.warn('submitPayment: Room ID mismatch', {
-      leaseRoomId: this.formData.lease.room_id,
-      bookingRoomId: booking.room_id,
-      timestamp: new Date().toISOString(),
-    });
-    this.formData.lease.room_id = booking.room_id;
-    this.formData.lease.room_number = booking.room_number;
-    this.formData.payment.room_id = booking.room_id;
-    this.formData.payment.room_number = booking.room_number;
-    this.persistState();
-    this.showSwal('Room Corrected', 'Room ID was updated to match the selected booking.', 'warning');
-  }
+
   this.loading = true;
   this.loadingText = 'Processing payment...';
+
   try {
     const userInfo = this.getUserInfo();
-    if (!userInfo || !userInfo.id) throw new Error('User information not found. Please log in again.');
+    if (!userInfo || !userInfo.id) throw new Error('User information not found.');
+
     const data = {
       user_id: userInfo.id,
       booking_id: Number(this.formData.bookingId),
@@ -3097,76 +3257,133 @@ async submitPayment() {
       property_title: this.formData.payment.property_title,
       transaction_id: `txn_${uuidv4()}_${Date.now()}`,
       payment_details: this.formData.payment.payment_details,
-      room_id: this.formData.lease.room_id, // Include room_id in payment data
     };
-    const requiredFields = [
-      'user_id', 'booking_id', 'property_id', 'billing_address_id',
-      'amount', 'payment_method_id', 'payment_type_id', 'date',
-      'status', 'transaction_id', 'room_id'
-    ];
-    const missingFields = requiredFields.filter(field => !data[field]);
-    if (missingFields.length > 0) {
-      throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+
+    const success = await this.$refs.paymentForm.submitFromParent(data);
+    if (!success) throw new Error('Payment submission failed.');
+
+    // Ensure payment ID is set after successful submission
+    const paymentId = this.$refs.paymentForm.getPaymentId?.(); // Assuming PaymentForm has a method to return payment ID
+    if (!paymentId) {
+      throw new Error('Payment ID not returned from PaymentForm.');
     }
+
+    this.formData.payment.id = paymentId;
+    this.isPaymentPending = true;
+    this.persistState();
+    this.showSwal('Payment Submitted', 'Awaiting verification.', 'info');
+    this.startPaymentPolling(); // Start polling to check payment status
+  } catch (error) {
+    console.error('submitPayment:', {
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+    this.showSwal('Error', this.handleError(error, 'Failed to process payment.'), 'error');
+    this.isPaymentPending = false;
+    this.formData.payment.id = null; // Clear invalid payment ID
+    this.persistState();
+  } finally {
+    this.loading = false;
+    this.loadingText = '';
+  }
+},
+
+async completePayment() {
+  if (!this.validateSession()) {
+    this.showSwal('Error', 'Session expired. Please log in again.', 'error').then(() => {
+      this.$router.push('/login');
+    });
+    return;
+  }
+
+  // Attempt to recover payment ID if missing
+  if (!this.formData.payment.id) {
+    try {
+      // Check if PaymentForm has a stored payment ID
+      const paymentId = this.$refs.paymentForm.getPaymentId?.();
+      if (paymentId) {
+        this.formData.payment.id = paymentId;
+        this.persistState();
+      } else {
+        // Fetch recent payments for the user
+        const response = await makeRequest({
+          method: 'GET',
+          url: `${this.API_BASE_URL}/v1/payments?booking_id=${this.formData.bookingId}&status=pending,received`,
+          headers: { Authorization: `Bearer ${this.authStore.token}` },
+          requiresAuth: true,
+        });
+        const recentPayment = response.data?.data?.[0];
+        if (recentPayment && recentPayment.id) {
+          this.formData.payment.id = recentPayment.id;
+          this.formData.payment.status = recentPayment.status;
+          this.formData.payment.transaction_id = recentPayment.transaction_id;
+          this.formData.payment.receipt_url = recentPayment.receipt_url || null;
+          this.formData.payment.receipt_number = recentPayment.receipt_number || null;
+          this.persistState();
+        } else {
+          this.showSwal('Error', 'No payment ID found. Please resubmit the payment in Step 6.', 'error');
+          this.currentStep = 6;
+          this.isPaymentPending = false;
+          this.persistState();
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('completePayment: Failed to recover payment ID', {
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      });
+      this.showSwal('Error', 'No payment ID found. Please resubmit the payment in Step 6.', 'error');
+      this.currentStep = 6;
+      this.isPaymentPending = false;
+      this.persistState();
+      return;
+    }
+  }
+
+  this.loading = true;
+  this.loadingText = 'Completing payment...';
+
+  try {
     const response = await makeRequest({
       method: 'POST',
-      url: `${this.API_BASE_URL}/v1/payments`,
-      data,
+      url: `${this.API_BASE_URL}/v1/payments/${this.formData.payment.id}/complete`,
       headers: {
         Authorization: `Bearer ${this.authStore.token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       requiresAuth: true,
     });
-    console.log('submitPayment: Payment submission response', {
-      status: response.status,
-      paymentId: response.data?.data?.id || response.data?.data?.payment_id,
-      transactionId: response.data?.data?.transaction_id,
-      roomId: data.room_id,
-      responseData: response.data,
-      timestamp: new Date().toISOString(),
-    });
+
     if (response.status === 200 || response.status === 201) {
-      this.formData.payment.id = response.data?.data?.id || response.data?.data?.payment_id;
-      this.formData.payment.transaction_id = response.data?.data?.transaction_id || data.transaction_id;
-      this.formData.payment.status = response.data?.data?.status || 'pending';
-      this.isPaymentPending = true;
-      this.persistState();
-      this.startPaymentPolling();
-      this.showSwal('Payment Submitted', 'Your payment has been submitted. Awaiting verification.', 'info');
-    } else {
-      throw new Error(response.data?.message || 'Failed to process payment.');
-    }
-  } catch (error) {
-    console.error('submitPayment: Error processing payment', {
-      error: error.message,
-      response: error.response?.data,
-      timestamp: new Date().toISOString(),
-    });
-    if (error.response?.status === 422 && error.response?.data?.errors?.booking_id) {
-      this.errors.bookingId = error.response.data.errors.booking_id.join(', ');
-      this.errorMessage = this.errors.bookingId;
-      this.showSwal('Invalid Booking ID', this.errorMessage, 'error');
-      this.currentStep = 1;
-      await this.fetchConfirmedBookings();
-    } else if (error.response?.status === 422 && error.response?.data?.errors?.room_id) {
-      this.errors.lease_room_id = error.response.data.errors.room_id.join(', ');
-      this.errorMessage = this.errors.lease_room_id;
-      this.showSwal('Invalid Room ID', this.errorMessage, 'error');
-      this.currentStep = 3;
-      await this.fetchAvailableRooms();
-    } else if (error.response?.status === 403) {
-      this.errorMessage = 'You do not have permission to make this payment.';
-      this.showSwal('Unauthorized', this.errorMessage, 'error');
-    } else if (error.response?.status === 401) {
-      this.errorMessage = 'Session Expired. Redirecting to login...';
-      this.showSwal('Session Expired', this.errorMessage, 'error').then(() => {
-        this.clearSession();
-        this.$router.push('/login');
+      this.formData.payment.status = response.data.data.status;
+      this.formData.payment.completed_at = response.data.data.completed_at;
+      this.clearPersistedState(); // Clear storage for tracking steps
+      this.showSwal('Success', 'Payment completed successfully!', 'success').then(() => {
+        this.$router.push({ name: 'my-leases' });
       });
     } else {
-      this.errorMessage = this.handleError(error, 'Failed to process payment.');
+      throw new Error(response.data?.message || 'Failed to complete payment.');
     }
+  } catch (error) {
+    let errorMessage = 'Failed to complete payment.';
+    if (error.response?.status === 401) {
+      errorMessage = 'Session expired. Redirecting to login...';
+      this.showSwal('Error', errorMessage, 'error').then(() => {
+        this.$router.push('/login');
+      });
+    } else if (error.response?.status === 403) {
+      errorMessage = 'You are not authorized to complete this payment.';
+    } else if (error.response?.status === 404) {
+      errorMessage = 'Payment not found. Please resubmit the payment in Step 6.';
+      this.formData.payment.id = null;
+      this.isPaymentPending = false;
+      this.currentStep = 6;
+      this.persistState();
+    } else if (error.response?.status === 422) {
+      errorMessage = error.response.data.message || 'Invalid payment status.';
+    }
+    this.showSwal('Error', errorMessage, 'error');
   } finally {
     this.loading = false;
     this.loadingText = '';
@@ -3186,7 +3403,7 @@ async submitPayment() {
         });
         let pdfUrl = response.data?.data?.url;
         pdfUrl = pdfUrl
-          .replace('c3.amali.japango.co.tz', 'e1.japango.co.tz')
+          .replace('c3.amali.japango.co.tz', 'app.eagersky.co.tz')
           .replace('http://', 'https://')
           .replace('/storage/leases/pdfs/', '/pdfs/');
         const pdfWindow = window.open(pdfUrl, '_blank');
@@ -3422,1119 +3639,6 @@ async submitPayment() {
 </script>
 
 
-<style scoped>
-/* Core Styles */
-.rental-application {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  padding: 20px;
-  color: #334155;
-}
 
-.container {
-  max-width: 900px;
-  margin: 0 auto;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
 
-/* Header Styles */
-.header {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-  color: white;
-  padding: 32px;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
-}
-
-.header::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-  animation: shimmer 3s ease-in-out infinite;
-}
-
-.header h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin-bottom: 8px;
-  position: relative;
-  z-index: 2;
-}
-
-.header p {
-  opacity: 0.9;
-  font-size: 1.1rem;
-  position: relative;
-  z-index: 2;
-}
-
-@keyframes shimmer {
-  0%, 100% { transform: rotate(0deg); }
-  50% { transform: rotate(180deg); }
-}
-
-/* Progress Bar Styles */
-.progress-container {
-  padding: 24px 32px;
-  background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.progress-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  position: relative;
-  margin-bottom: 16px;
-}
-
-.progress-line {
-  position: absolute;
-  top: 20px;
-  left: 32px;
-  right: 32px;
-  height: 3px;
-  background: #e2e8f0;
-  border-radius: 2px;
-  z-index: 1;
-}
-
-.progress-line-active {
-  height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
-  border-radius: 2px;
-  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-}
-
-.step-indicator {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  position: relative;
-  z-index: 2;
-  background: white;
-  border: 3px solid #e2e8f0;
-  color: #94a3b8;
-}
-
-.step-indicator.active {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  color: white;
-  border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-  transform: scale(1.1);
-}
-
-.step-indicator.completed {
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white;
-  border-color: #10b981;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-}
-
-.step-labels {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 12px;
-}
-
-.step-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #64748b;
-  text-align: center;
-  width: 100px;
-  transition: color 0.3s ease;
-}
-
-.step-label.active {
-  color: #3b82f6;
-  font-weight: 600;
-}
-
-/* Form Styles */
-.form-container {
-  padding: 40px;
-}
-
-.step-content {
-  animation: fadeInSlide 0.4s ease-out;
-}
-
-@keyframes fadeInSlide {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-  20%, 40%, 60%, 80% { transform: translateX(5px); }
-}
-
-.step-title {
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 8px;
-}
-
-.step-description {
-  color: #64748b;
-  margin-bottom: 32px;
-  font-size: 1.1rem;
-}
-
-.form-group {
-  margin-bottom: 24px;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 24px;
-}
-
-label {
-  display: block;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 8px;
-  font-size: 0.95rem;
-}
-
-input, select, textarea {
-  width: 100%;
-  padding: 14px 16px;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 16px;
-  transition: all 0.3s ease;
-  background: white;
-  font-family: inherit;
-}
-
-input:focus, select:focus, textarea:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  transform: translateY(-1px);
-}
-
-input:hover, select:hover, textarea:hover {
-  border-color: #cbd5e1;
-}
-
-input.error, select.error {
-  border-color: #dc2626;
-}
-
-input[readonly] {
-  background-color: #f8fafc;
-  color: #64748b;
-  cursor: not-allowed;
-}
-
-.error-message {
-  background: #fef2f2;
-  color: #dc2626;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border-left: 4px solid #dc2626;
-  margin-top: 8px;
-  font-size: 14px;
-}
-
-/* Button Styles */
-.btn {
-  padding: 14px 28px;
-  border-radius: 12px;
-  border: none;
-  font-weight: 600;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: none;
-  font-family: inherit;
-  position: relative;
-  overflow: hidden;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-
-
-.btn:before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  transition: left 0.5s;
-}
-
-.btn:hover:before {
-  left: 100%;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  color: white;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
-  min-width: 140px;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none !important;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  margin-top: 40px;
-  padding-top: 24px;
-  border-top: 1px solid #e2e8f0;
-}
-
-/* Info Card Styles */
-.info-card {
-  background: linear-gradient(135deg, #dbeafe, #e0e7ff);
-  border: 1px solid #bfdbfe;
-  border-radius: 16px;
-  padding: 24px;
-  margin: 24px 0;
-  position: relative;
-  overflow: hidden;
-}
-
-.info-card.caution {
-  background: linear-gradient(135deg, #fef2f2, #fee2e2);
-  border: 1px solid #fecaca;
-}
-
-.info-card.caution::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: linear-gradient(180deg, #dc2626, #b91c1c);
-}
-
-.info-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: linear-gradient(180deg, #3b82f6, #8b5cf6);
-}
-
-.info-card h3 {
-  color: #1e40af;
-  font-weight: 700;
-  margin-bottom: 12px;
-  font-size: 1.2rem;
-}
-
-.info-card.caution h3 {
-  color: #b91c1c;
-}
-
-.info-card p {
-  color: #1e40af;
-  margin: 6px 0;
-  font-size: 1rem;
-  line-height: 1.5;
-}
-
-.info-card.caution p {
-  color: #b91c1c;
-}
-
-.info-card strong {
-  font-weight: 600;
-  color: #1e3a8a;
-}
-
-.info-card.caution strong {
-  color: #991b1b;
-}
-
-/* Success Animation */
-.success-animation {
-  text-align: center;
-  padding: 40px 20px;
-}
-
-.checkmark {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #10b981, #059669);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 24px;
-  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
-  animation: scaleIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.checkmark svg {
-  width: 40px;
-  height: 40px;
-  stroke: white;
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  fill: none;
-  animation: checkmarkDraw 0.8s ease-in-out 0.3s both;
-}
-
-@keyframes scaleIn {
-  0% {
-    transform: scale(0);
-    opacity: 0;
-  }
-  50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes checkmarkDraw {
-  0% {
-    stroke-dasharray: 0 50;
-    stroke-dashoffset: 0;
-  }
-  100% {
-    stroke-dasharray: 50 50;
-    stroke-dashoffset: -50;
-  }
-}
-
-/* Loading Styles */
-.loading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.loading-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 20px;
-  color: #64748b;
-  font-weight: 500;
-}
-
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid #e2e8f0;
-  border-top: 2px solid #3b82f6;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Tooltip Styles */
-.step-indicator[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: -35px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #1e293b;
-  color: white;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  white-space: nowrap;
-  z-index: 10;
-  opacity: 0;
-  animation: tooltipFadeIn 0.2s ease-out forwards;
-}
-
-.step-indicator[data-tooltip]:hover::before {
-  content: '';
-  position: absolute;
-  bottom: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 5px solid #1e293b;
-  z-index: 10;
-  opacity: 0;
-  animation: tooltipFadeIn 0.2s ease-out forwards;
-}
-
-@keyframes tooltipFadeIn {
-  0% { opacity: 0; transform: translateX(-50%) translateY(5px); }
-  100% { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .rental-application {
-    padding: 10px;
-  }
-  
-  .container {
-    border-radius: 16px;
-    margin: 0;
-  }
-  
-  .header {
-    padding: 24px 20px;
-  }
-  
-  .header h1 {
-    font-size: 2rem;
-  }
-  
-  .progress-container {
-    padding: 20px;
-  }
-  
-  .form-container {
-    padding: 24px 20px;
-  }
-  
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  
-  .step-labels {
-    display: none;
-  }
-  
-  .step-indicator {
-    width: 36px;
-    height: 36px;
-    font-size: 13px;
-  }
-  
-  .progress-line {
-    left: 18px;
-    right: 18px;
-  }
-  
-  .btn {
-    padding: 12px 20px;
-    font-size: 15px;
-  }
-  
-  .form-actions {
-    flex-direction: column;
-    gap: 12px;
-  }
-  
-  .form-actions .btn {
-    width: 100%;
-  }
-}
-
-@media (max-width: 480px) {
-  .header h1 {
-    font-size: 1.8rem;
-  }
-  
-  .step-title {
-    font-size: 1.5rem;
-  }
-  
-  .step-description {
-    font-size: 1rem;
-  }
-  
-  .info-card {
-    padding: 16px;
-  }
-  
-  .checkmark {
-    width: 60px;
-    height: 60px;
-  }
-  
-  .checkmark svg {
-    width: 30px;
-    height: 30px;
-  }
-}
-
-/* Print Styles */
-@media print {
-  .rental-application {
-    background: white;
-    padding: 0;
-  }
-  
-  .container {
-    box-shadow: none;
-    border: 1px solid #e2e8f0;
-  }
-  
-  .btn, .form-actions {
-    display: none;
-  }
-}
-
-/* Add these styles to your existing CSS */
-
-.loading-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
-  margin: 1rem 0;
-}
-
-.loading-indicator .spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid #e9ecef;
-  border-top: 2px solid #007bff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 0.5rem;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.info-card.caution {
-  background: #fff3cd;
-  border: 1px solid #ffeaa7;
-  color: #856404;
-}
-
-.info-card.caution h3 {
-  color: #856404;
-  margin-bottom: 0.5rem;
-}
-
-.readonly-field {
-  background-color: #f8f9fa !important;
-  cursor: not-allowed;
-}
-
-.debug-info {
-  color: #6c757d;
-  font-style: italic;
-  margin-top: 0.25rem;
-  display: block;
-}
-
-.btn.btn-secondary {
-  background-color: #6c757d;
-  border-color: #6c757d;
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  margin-top: 1rem;
-}
-
-.btn.btn-secondary:hover {
-  background-color: #5a6268;
-  border-color: #545b62;
-}
-
-.btn.btn-secondary:disabled {
-  background-color: #6c757d;
-  border-color: #6c757d;
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
-/* Error styling */
-.form-group select.error,
-.form-group input.error {
-  border-color: #dc3545;
-  background-color: #fff5f5;
-}
-
-.error-message {
-  color: #dc3545;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
-}
-
-/* Enhanced styles for forward-only step progression */
-
-.step-indicator {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  position: relative;
-  border: 2px solid #e5e7eb;
-  background-color: #f9fafb;
-  color: #6b7280;
-}
-
-/* Active step */
-.step-indicator.active {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-  animation: pulse 1.5s infinite;
-}
-
-/* Completed steps */
-.step-indicator.completed {
-  background-color: #10b981;
-  border-color: #10b981;
-  color: white;
-  cursor: pointer;
-}
-
-.step-indicator.completed:hover {
-  background-color: #059669;
-  border-color: #059669;
-  transform: scale(1.05);
-}
-
-/* Accessible (next available) steps */
-.step-indicator.accessible {
-  background-color: #f3f4f6;
-  border-color: #d1d5db;
-  color: #4b5563;
-  cursor: pointer;
-}
-
-.step-indicator.accessible:hover {
-  background-color: #e5e7eb;
-  border-color: #9ca3af;
-  transform: scale(1.05);
-}
-
-/* Locked steps */
-.step-indicator.locked {
-  background-color: #f3f4f6;
-  border-color: #e5e7eb;
-  color: #9ca3af;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.step-indicator.locked:hover {
-  transform: none;
-  background-color: #f3f4f6;
-}
-
-/* Step icons and numbers */
-.step-icon {
-  font-size: 16px;
-  line-height: 1;
-}
-
-.step-number {
-  font-size: 16px;
-  font-weight: 700;
-}
-
-/* Step labels */
-.step-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #6b7280;
-  text-align: center;
-  margin-top: 8px;
-  transition: color 0.3s ease;
-}
-
-.step-label.active {
-  color: #3b82f6;
-  font-weight: 600;
-}
-
-.step-label.completed {
-  color: #10b981;
-  font-weight: 600;
-}
-
-.step-label.locked {
-  color: #9ca3af;
-  opacity: 0.7;
-}
-
-/* Progress line */
-.progress-line {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background-color: #e5e7eb;
-  transform: translateY(-50%);
-  z-index: 1;
-}
-
-.progress-line-active {
-  height: 100%;
-  background: linear-gradient(90deg, #10b981, #3b82f6);
-  transition: width 0.6s ease;
-  border-radius: 1px;
-}
-
-/* Progress statistics */
-.progress-stats {
-  display: flex;
-  justify-content: center;
-  gap: 2rem;
-  margin: 1rem 0 2rem 0;
-  padding: 1rem;
-  background-color: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-.stats-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.stats-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.stats-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-/* Step completion status */
-.completion-status {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  background-color: #f0f9ff;
-  border: 1px solid #0ea5e9;
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.completed-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 14px;
-  font-weight: 600;
-  color: #10b981;
-}
-
-.pending-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 14px;
-  font-weight: 600;
-  color: #f59e0b;
-}
-
-.completion-status small {
-  font-size: 12px;
-  color: #64748b;
-}
-
-/* Step header */
-.step-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.step-title {
-  margin: 0;
-  color: #1e293b;
-  font-size: 24px;
-  font-weight: 700;
-}
-
-/* Form actions enhanced */
-.form-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem 0;
-  border-top: 1px solid #e2e8f0;
-  margin-top: 2rem;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.action-info {
-  flex: 1;
-  min-width: 200px;
-}
-
-.step-info {
-  font-size: 13px;
-  color: #64748b;
-  font-style: italic;
-}
-
-.step-completed {
-  font-size: 13px;
-  color: #10b981;
-  font-weight: 500;
-}
-
-/* Enhanced button states */
-.btn-primary {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
-  padding: 0.75rem 2rem;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 16px;
-  transition: all 0.2s ease;
-  border: none;
-  cursor: pointer;
-  min-width: 160px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-}
-
-.btn-primary:disabled {
-  background-color: #9ca3af;
-  border-color: #9ca3af;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.btn-loading {
-  background-color: #6b7280 !important;
-  cursor: wait !important;
-}
-
-.btn-completed {
-  background-color: #10b981;
-  border-color: #10b981;
-}
-
-.btn-completed:hover:not(:disabled) {
-  background-color: #059669;
-}
-
-/* Completion summary */
-.completion-summary {
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin: 2rem 0;
-}
-
-.completion-summary h3 {
-  margin: 0 0 1rem 0;
-  color: #1e293b;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.completion-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.completion-item {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  background-color: white;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-}
-
-.completion-item.completed {
-  border-color: #10b981;
-  background-color: #f0fdf4;
-}
-
-.completion-icon {
-  font-size: 18px;
-  min-width: 20px;
-}
-
-.completion-label {
-  flex: 1;
-  font-weight: 500;
-  color: #374151;
-}
-
-.completion-time {
-  font-size: 12px;
-  color: #64748b;
-}
-
-/* Animations */
-@keyframes pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-  }
-  50% {
-    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.1);
-  }
-}
-
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-  20%, 40%, 60%, 80% { transform: translateX(5px); }
-}
-
-.shake {
-  animation: shake 0.5s ease-in-out;
-}
-
-/* Loading states */
-.loading-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  padding: 2rem;
-  color: #6b7280;
-}
-
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid #e5e7eb;
-  border-top: 2px solid #3b82f6;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
-  .progress-stats {
-    flex-direction: column;
-    gap: 1rem;
-  }
-  
-  .step-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .form-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .action-info {
-    text-align: center;
-  }
-  
-  .btn-primary {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .completion-item {
-    flex-wrap: wrap;
-  }
-  
-  .completion-time {
-    width: 100%;
-    text-align: right;
-    margin-top: 0.25rem;
-  }
-}
-</style>
-
+"

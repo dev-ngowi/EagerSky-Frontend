@@ -14,6 +14,7 @@ const adminRoutes: INavigationRoute[] = [
       { name: 'users', displayName: 'All Users', meta: { icon: 'person' } },
       { name: 'roles', displayName: 'Roles', meta: { icon: 'admin_panel_settings' } },
       { name: 'assign-roles', displayName: 'Assign Roles', meta: { icon: 'manage_accounts' } },
+     { name: 'assign-approvers', displayName: 'Assign Approvers', meta: { icon: 'manage_accounts' } },
     ],
   },
 {
@@ -37,6 +38,8 @@ const adminRoutes: INavigationRoute[] = [
         displayName: 'Properties Master',
         meta: { icon: 'home' },
         children: [
+          
+          { name: 'owner-management', displayName: 'Property Owner', meta: { icon: 'real_estate_agent' } },
           { name: 'category', displayName: 'Categories', meta: { icon: 'category' } },
           { name: 'properties', displayName: 'All Properties', meta: { icon: 'house' } },
           { name: 'images', displayName: 'Properties Images', meta: { icon: 'image' } },
@@ -66,15 +69,15 @@ const adminRoutes: INavigationRoute[] = [
           { name: 'contractors', displayName: 'Contractors', meta: { icon: 'engineering' } },
         ],
       },
-      {
+     {
         name: 'documents-management',
         displayName: 'Documents',
         meta: { icon: 'description' },
         children: [
-          { name: 'document-category', displayName: 'Categories', meta: { icon: 'category' } },
-          { name: 'documents', displayName: 'Documents', meta: { icon: 'insert_drive_file' } },
+          // { name: 'document-category', displayName: 'Categories', meta: { icon: 'category' } },
+          // { name: 'documents', displayName: 'Documents', meta: { icon: 'insert_drive_file' } },
           { name: 'templates', displayName: 'Templates', meta: { icon: 'article' } },
-        ],
+         ],
       },
     ],
   },
@@ -98,7 +101,7 @@ const adminRoutes: INavigationRoute[] = [
         displayName: 'Rental & Leads',
         meta: { icon: 'people' },
         children: [
-          { name: 'rental-applications', displayName: 'Rental Applications', meta: { icon: 'assignment' } },
+          { name: 'admin-rental-applications', displayName: 'Rental Applications', meta: { icon: 'assignment' } },
           { name: 'pending_rental_application', displayName: 'Pending Rental Applications', meta: { icon: 'assignment' } },
         ],
       },
@@ -107,7 +110,7 @@ const adminRoutes: INavigationRoute[] = [
         displayName: 'Leases Master',
         meta: { icon: 'receipt' },
         children: [
-          { name: 'leases', displayName: 'Leases', meta: { icon: 'description' } },
+          // { name: 'leases', displayName: 'Leases', meta: { icon: 'description' } },
           { name: 'properties-term-period', displayName: 'Term Period', meta: { icon: 'description' } },
           { name: 'lease_agreement', displayName: 'View Lease Agreement', meta: { icon: 'description' } },
         ],
@@ -118,7 +121,7 @@ const adminRoutes: INavigationRoute[] = [
         meta: { icon: 'notifications_active' },
         children: [
           { name: 'client-message', displayName: 'Client Messages', meta: { icon: 'message' } },
-          { name: 'alerts', displayName: 'Alerts', meta: { icon: 'warning' } },
+          // { name: 'alerts', displayName: 'Alerts', meta: { icon: 'warning' } },
           { name: 'notifications', displayName: 'Notifications', meta: { icon: 'notifications' } },
         ],
       },
@@ -129,15 +132,15 @@ const adminRoutes: INavigationRoute[] = [
     displayName: 'Financial Master',
     meta: { icon: 'account_balance' },
     children: [
-      {
-        name: 'transaction-master',
-        displayName: 'Transaction Master',
-        meta: { icon: 'receipt' },
-        children: [
-          { name: 'admin-transactions', displayName: 'Transactions', meta: { icon: 'payments' } },
-          { name: 'admin-energy-consumption', displayName: 'Energy Consumption', meta: { icon: 'battery_charging_full' } },
-        ],
-      },
+      // {
+      //   name: 'transaction-master',
+      //   displayName: 'Transaction Master',
+      //   meta: { icon: 'receipt' },
+      //   children: [
+      //     { name: 'admin-transactions', displayName: 'Transactions', meta: { icon: 'payments' } },
+      //     { name: 'admin-energy-consumption', displayName: 'Energy Consumption', meta: { icon: 'battery_charging_full' } },
+      //   ],
+      // },
       {
         name: 'payment-master-main',
         displayName: 'Payment Master',
@@ -151,15 +154,18 @@ const adminRoutes: INavigationRoute[] = [
       },
     ],
   },
-  {
-    name: 'report-master',
-    displayName: 'Report Master',
-    meta: { icon: 'assessment' },
-    children: [
-      { name: 'property-reports', displayName: 'Property Reports', meta: { icon: 'house' } },
-      { name: 'financial-reports', displayName: 'Financial Reports', meta: { icon: 'attach_money' } },
-    ],
-  },
+ {
+  name: 'report-master',
+  displayName: 'Report Master',
+  meta: { icon: 'bar_chart' }, 
+  children: [
+    { name: 'property-reports', displayName: 'Property Reports', meta: { icon: 'home' } }, // Updated to 'home' for clarity
+    { name: 'booking-reports', displayName: 'Bookings Reports', meta: { icon: 'event' } }, // Changed to 'event' for booking-related context
+    { name: 'rental-reports', displayName: 'Rentals Reports', meta: { icon: 'store' } }, // Changed to 'store' to reflect rental properties
+    { name: 'lease-reports', displayName: 'Leases Reports', meta: { icon: 'description' } }, // Changed to 'description' for lease documents
+    { name: 'payments-reports', displayName: 'Payments Reports', meta: { icon: 'payments' } }, // Updated to 'payments' for clarity
+  ],
+ }
 ];
 
 const adminNavigation = {

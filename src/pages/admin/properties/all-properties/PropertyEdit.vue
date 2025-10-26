@@ -1,10 +1,9 @@
 <template>
-  <div class="p-4">
-    <h2 class="text-xl font-bold mb-4">{{ $t('Edit Property') }}</h2>
-
-    <form @submit.prevent="submitForm" :disabled="isSubmitting || loadingDropdowns">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="mb-4">
+  <div class="form-container">
+    <h2 class="form-title">{{ $t('Edit Property') }}</h2>
+    <form @submit.prevent="submitForm" class="property-form" :disabled="isSubmitting || loadingDropdowns">
+      <div class="form-grid">
+        <div class="form-field">
           <VaInput
             v-model="form.title"
             label="Title"
@@ -13,10 +12,11 @@
             :disabled="isSubmitting || loadingDropdowns"
             required
             aria-describedby="title-error"
+            aria-label="Enter property title"
+            class="form-input"
           />
         </div>
-
-        <div class="mb-4">
+        <div class="form-field">
           <VaSelect
             v-model="form.category_id"
             label="Category"
@@ -28,10 +28,11 @@
             :disabled="isSubmitting || loadingDropdowns"
             required
             aria-describedby="category-error"
+            aria-label="Select property category"
+            class="form-select"
           />
         </div>
-
-        <div class="mb-4">
+        <div class="form-field">
           <VaSelect
             v-model="form.location_id"
             label="Location"
@@ -43,10 +44,11 @@
             :disabled="isSubmitting || loadingDropdowns"
             required
             aria-describedby="location-error"
+            aria-label="Select property location"
+            class="form-select"
           />
         </div>
-
-        <div class="mb-4">
+        <div class="form-field">
           <VaInput
             v-model.number="form.price"
             type="number"
@@ -55,10 +57,11 @@
             :error-messages="errors.price ? [errors.price] : []"
             :disabled="isSubmitting || loadingDropdowns"
             aria-describedby="price-error"
+            aria-label="Enter property price"
+            class="form-input"
           />
         </div>
-
-        <div class="mb-4">
+        <div class="form-field">
           <VaInput
             v-model.number="form.bedrooms"
             type="number"
@@ -67,10 +70,11 @@
             :error-messages="errors.bedrooms ? [errors.bedrooms] : []"
             :disabled="isSubmitting || loadingDropdowns"
             aria-describedby="bedrooms-error"
+            aria-label="Enter number of bedrooms"
+            class="form-input"
           />
         </div>
-
-        <div class="mb-4">
+        <div class="form-field">
           <VaInput
             v-model.number="form.bathrooms"
             type="number"
@@ -79,10 +83,11 @@
             :error-messages="errors.bathrooms ? [errors.bathrooms] : []"
             :disabled="isSubmitting || loadingDropdowns"
             aria-describedby="bathrooms-error"
+            aria-label="Enter number of bathrooms"
+            class="form-input"
           />
         </div>
-
-        <div class="mb-4">
+        <div class="form-field">
           <VaInput
             v-model.number="form.area_sqft"
             type="number"
@@ -92,10 +97,11 @@
             :disabled="isSubmitting || loadingDropdowns"
             required
             aria-describedby="area-error"
+            aria-label="Enter area in square feet"
+            class="form-input"
           />
         </div>
-
-        <div class="mb-4">
+        <div class="form-field">
           <VaInput
             v-model.number="form.year_built"
             type="number"
@@ -104,10 +110,11 @@
             :error-messages="errors.year_built ? [errors.year_built] : []"
             :disabled="isSubmitting || loadingDropdowns"
             aria-describedby="year-built-error"
+            aria-label="Enter year built"
+            class="form-input"
           />
         </div>
-
-        <div class="mb-4">
+        <div class="form-field">
           <VaSelect
             v-model="form.status"
             label="Status (Optional)"
@@ -118,10 +125,11 @@
             text-by="text"
             :disabled="isSubmitting || loadingDropdowns"
             aria-describedby="status-error"
+            aria-label="Select property status"
+            class="form-select"
           />
         </div>
-
-        <div class="mb-4">
+        <div class="form-field">
           <VaInput
             v-model="form.list_date"
             type="date"
@@ -130,10 +138,11 @@
             :disabled="isSubmitting || loadingDropdowns"
             required
             aria-describedby="list-date-error"
+            aria-label="Enter property list date"
+            class="form-input"
           />
         </div>
-
-        <div class="mb-4">
+        <div class="form-field">
           <VaSelect
             v-model="form.branch_id"
             label="Branch (Optional)"
@@ -144,20 +153,22 @@
             text-by="text"
             :disabled="isSubmitting || loadingDropdowns"
             aria-describedby="branch-error"
+            aria-label="Select property branch"
+            class="form-select"
           />
         </div>
-
-        <div class="mb-4">
+        <div class="form-field">
           <VaCheckbox
             v-model="form.is_featured"
             label="Featured Property"
             :error-messages="errors.is_featured ? [errors.is_featured] : []"
             :disabled="isSubmitting || loadingDropdowns"
             aria-describedby="featured-error"
+            aria-label="Mark property as featured"
+            class="checkbox-input"
           />
         </div>
-
-        <div class="mb-4 col-span-2">
+        <div class="form-field form-field-full">
           <VaInput
             v-model="form.description"
             type="textarea"
@@ -166,13 +177,28 @@
             :error-messages="errors.description ? [errors.description] : []"
             :disabled="isSubmitting || loadingDropdowns"
             aria-describedby="description-error"
+            aria-label="Enter property description"
+            class="form-textarea"
           />
         </div>
       </div>
-
-      <div class="flex justify-end space-x-2 mt-4">
-        <VaButton color="secondary" :disabled="isSubmitting || loadingDropdowns" @click="resetForm">Cancel</VaButton>
-        <VaButton color="#00A3E0" type="submit" :disabled="isSubmitting || loadingDropdowns">
+      <div class="form-actions">
+        <VaButton
+          color="secondary"
+          :disabled="isSubmitting || loadingDropdowns"
+          @click="resetForm"
+          class="cancel-button"
+          aria-label="Cancel form"
+        >
+          Cancel
+        </VaButton>
+        <VaButton
+          color="#00A3E0"
+          type="submit"
+          :disabled="isSubmitting || loadingDropdowns"
+          class="submit-button"
+          aria-label="Submit property changes"
+        >
           <div v-if="isSubmitting" class="spinner" />
           <span v-else>Submit</span>
         </VaButton>
@@ -705,31 +731,157 @@ export default defineComponent({
   },
 });
 </script>
+<style lang="scss" scoped>
+.form-container {
+  padding: 0.75rem;
 
-<style scoped>
-.grid {
-  display: grid;
-}
-.grid-cols-1 {
-  grid-template-columns: 1fr;
-}
-.md\:grid-cols-2 {
-  @media (min-width: 768px) {
-    grid-template-columns: repeat(2, 1fr);
+  @media screen and (min-width: 768px) {
+    padding: 1rem;
   }
 }
-.gap-4 {
-  gap: 1rem;
+
+.form-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: #374151;
+
+  @media screen and (min-width: 768px) {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
 }
-.mb-4 {
-  margin-bottom: 1rem;
+
+.property-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
-.mt-4 {
-  margin-top: 1rem;
+
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    gap: 0.75rem;
+  }
 }
-.space-x-2 > :not(:last-child) {
-  margin-right: 0.5rem;
+
+.form-field {
+  width: 100%;
 }
+
+.form-field-full {
+  width: 100%;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  font-size: 0.875rem;
+
+  :deep(.va-input__label),
+  :deep(.va-select__label) {
+    font-size: 0.875rem;
+    color: #374151;
+    margin-bottom: 0.25rem;
+  }
+
+  :deep(.va-input__input),
+  :deep(.va-select__input) {
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+  }
+
+  :deep(.va-input__error-message),
+  :deep(.va-select__error-message),
+  :deep(.va-checkbox__error-message) {
+    font-size: 0.75rem;
+    color: #ef4444;
+    margin-top: 0.25rem;
+  }
+
+  @media screen and (min-width: 768px) {
+    font-size: 1rem;
+
+    :deep(.va-input__label),
+    :deep(.va-select__label) {
+      font-size: 1rem;
+    }
+
+    :deep(.va-input__input),
+    :deep(.va-select__input) {
+      padding: 0.75rem;
+    }
+
+    :deep(.va-input__error-message),
+    :deep(.va-select__error-message),
+    :deep(.va-checkbox__error-message) {
+      font-size: 0.875rem;
+    }
+  }
+}
+
+.form-textarea {
+  :deep(.va-input__input) {
+    min-height: 100px;
+    resize: vertical;
+  }
+}
+
+.checkbox-input {
+  :deep(.va-checkbox__square) {
+    width: 1.25rem;
+    height: 1.25rem;
+    min-width: 40px;
+    min-height: 40px;
+    margin-right: 0.5rem;
+    cursor: pointer;
+  }
+
+  :deep(.va-checkbox__label) {
+    font-size: 0.875rem;
+    color: #374151;
+    cursor: pointer;
+
+    @media screen and (min-width: 768px) {
+      font-size: 1rem;
+    }
+  }
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .cancel-button,
+  .submit-button {
+    min-height: 40px;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+
+    @media screen and (min-width: 768px) {
+      font-size: 0.875rem;
+      padding: 0.5rem 1rem;
+    }
+  }
+
+  .submit-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
 .spinner {
   width: 1rem;
   height: 1rem;
@@ -738,10 +890,148 @@ export default defineComponent({
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-right: 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
 }
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .form-container {
+    padding: 0.5rem;
+  }
+
+  .form-title {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .property-form {
+    gap: 0.25rem;
+  }
+
+  .form-grid {
+    gap: 0.25rem;
+  }
+
+  .form-input,
+  .form-select,
+  .form-textarea {
+    font-size: 0.75rem;
+
+    :deep(.va-input__label),
+    :deep(.va-select__label) {
+      font-size: 0.75rem;
+    }
+
+    :deep(.va-input__input),
+    :deep(.va-select__input) {
+      padding: 0.375rem;
+    }
+
+    :deep(.va-input__error-message),
+    :deep(.va-select__error-message),
+    :deep(.va-checkbox__error-message) {
+      font-size: 0.625rem;
+    }
+  }
+
+  .checkbox-input {
+    :deep(.va-checkbox__square) {
+      width: 1rem;
+      height: 1rem;
+      min-width: 36px;
+      min-height: 36px;
+    }
+
+    :deep(.va-checkbox__label) {
+      font-size: 0.75rem;
+    }
+  }
+
+  .form-actions {
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+
+    .cancel-button,
+    .submit-button {
+      font-size: 0.625rem;
+      padding: 0.25rem 0.5rem;
+    }
+
+    .spinner {
+      width: 0.875rem;
+      height: 0.875rem;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .form-container {
+    padding: 0.25rem;
+  }
+
+  .form-title {
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .form-input,
+  .form-select,
+  .form-textarea {
+    font-size: 0.625rem;
+
+    :deep(.va-input__label),
+    :deep(.va-select__label) {
+      font-size: 0.625rem;
+    }
+
+    :deep(.va-input__input),
+    :deep(.va-select__input) {
+      padding: 0.25rem;
+    }
+
+    :deep(.va-input__error-message),
+    :deep(.va-select__error-message),
+    :deep(.va-checkbox__error-message) {
+      font-size: 0.5rem;
+    }
+  }
+
+  .checkbox-input {
+    :deep(.va-checkbox__square) {
+      width: 0.875rem;
+      height: 0.875rem;
+      min-width: 32px;
+      min-height: 32px;
+    }
+
+    :deep(.va-checkbox__label) {
+      font-size: 0.625rem;
+    }
+  }
+
+  .form-actions {
+    gap: 0.125rem;
+    margin-top: 0.25rem;
+
+    .cancel-button,
+    .submit-button {
+      font-size: 0.5rem;
+      padding: 0.2rem 0.4rem;
+    }
+
+    .spinner {
+      width: 0.75rem;
+      height: 0.75rem;
+    }
   }
 }
 </style>

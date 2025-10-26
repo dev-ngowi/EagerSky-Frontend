@@ -11,6 +11,113 @@
         </div>
       </div>
 
+      <!-- Filter Section -->
+      <div class="filter-section" data-aos="fade-up" data-aos-delay="100">
+        <div class="filter-grid">
+          <!-- Price Range -->
+          <div class="filter-item">
+            <label for="min-price" class="filter-label">Min Price (TZS)</label>
+            <input
+              id="min-price"
+              type="number"
+              v-model.number="filters.minPrice"
+              placeholder="Min Price"
+              class="filter-input"
+              aria-label="Minimum price in TZS"
+              min="0"
+            />
+          </div>
+          <div class="filter-item">
+            <label for="max-price" class="filter-label">Max Price (TZS)</label>
+            <input
+              id="max-price"
+              type="number"
+              v-model.number="filters.maxPrice"
+              placeholder="Max Price"
+              class="filter-input"
+              aria-label="Maximum price in TZS"
+              min="0"
+            />
+          </div>
+          <!-- Bedrooms -->
+          <div class="filter-item">
+            <label for="bedrooms" class="filter-label">Bedrooms</label>
+            <select
+              id="bedrooms"
+              v-model="filters.bedrooms"
+              class="filter-select"
+              aria-label="Number of bedrooms"
+            >
+              <option value="">Any</option>
+              <option v-for="n in 10" :key="n" :value="n">{{ n }}</option>
+            </select>
+          </div>
+          <!-- Bathrooms -->
+          <div class="filter-item">
+            <label for="bathrooms" class="filter-label">Bathrooms</label>
+            <select
+              id="bathrooms"
+              v-model="filters.bathrooms"
+              class="filter-select"
+              aria-label="Number of bathrooms"
+            >
+              <option value="">Any</option>
+              <option v-for="n in 10" :key="n" :value="n">{{ n }}</option>
+            </select>
+          </div>
+          <!-- Location -->
+          <div class="filter-item">
+            <label for="location" class="filter-label">Location</label>
+            <select
+              id="location"
+              v-model="filters.location"
+              class="filter-select"
+              aria-label="Filter by location"
+            >
+              <option value="">All Locations</option>
+              <option v-for="loc in locations" :key="loc.id" :value="loc.id">{{ loc.name }}</option>
+            </select>
+          </div>
+          <!-- Category -->
+          <div class="filter-item">
+            <label for="category" class="filter-label">Category</label>
+            <select
+              id="category"
+              v-model="filters.category"
+              class="filter-select"
+              aria-label="Property category"
+            >
+              <option value="">All Categories</option>
+              <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+            </select>
+          </div>
+          <!-- Status -->
+          <div class="filter-item">
+            <label for="status" class="filter-label">Status</label>
+            <select
+              id="status"
+              v-model="filters.status"
+              class="filter-select"
+              aria-label="Property status"
+            >
+              <option value="">All Statuses</option>
+              <option value="for_rent">For Rent</option>
+              <option value="for_sale">For Sale</option>
+            </select>
+          </div>
+          <!-- Clear Filters Button -->
+          <div class="filter-item filter-button">
+            <button
+              class="cta-button"
+              @click="clearFilters"
+              aria-label="Clear all filters"
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Loading State -->
       <div v-if="isLoading" class="loading text-center">
         <div class="spinner"></div>
@@ -96,14 +203,6 @@
                   <span>{{ property.area }} {{ property.areaUnit }}</span>
                 </div>
                 <div class="feature">
-                  <i class="bi bi-building" aria-hidden="true"></i>
-                  <span>{{ property.category }}</span>
-                </div>
-                <div class="feature">
-                  <i class="bi bi-lightning" aria-hidden="true"></i>
-                  <span>{{ property.energy_rating }}</span>
-                </div>
-                <div class="feature">
                   <i class="bi bi-door-open" aria-hidden="true"></i>
                   <span>{{ property.available_rooms }} Available</span>
                 </div>
@@ -127,7 +226,7 @@
       </div>
       <div v-else-if="!showError" class="no-data text-center">
         <h3>No Properties Available</h3>
-        <p>Check back later for new listings!</p>
+        <p>{{ hasFilters ? 'No properties match your current filters. Try adjusting your search criteria.' : 'Check back later for new listings!' }}</p>
       </div>
 
       <!-- Error Message -->
@@ -162,12 +261,12 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import makeRequest from '../../services/makeRequest';
 import AOS from 'aos';
 
-// Define the Property interface
+// Define interfaces
 interface Property {
   id: string;
   title: string;
@@ -188,37 +287,139 @@ interface Property {
   available_rooms: number;
   booked_rooms: number;
   map_url: string;
+  status: string;
+}
+
+interface Filters {
+  minPrice: number | null;
+  maxPrice: number | null;
+  bedrooms: number | string;
+  bathrooms: number | string;
+  location: number | string;
+  category: number | string;
+  status: string;
+  search?: string; // Added to support grokSearch from hero
+}
+
+interface Location {
+  id: number;
+  name: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
 }
 
 const router = useRouter();
+const route = useRoute(); // Add useRoute to access query parameters
 const initialDisplayCount = 6;
 const showAll = ref(false);
 const showError = ref(false);
 const isLoading = ref(false);
 const failedImages = ref<Set<string>>(new Set());
-
 const properties = ref<Property[]>([]);
+const locations = ref<Location[]>([]);
+const categories = ref<Category[]>([]);
 
-const displayedProperties = computed((): Property[] => {
-  return showAll.value ? properties.value : properties.value.slice(0, initialDisplayCount);
+const filters = ref<Filters>({
+  minPrice: null,
+  maxPrice: null,
+  bedrooms: '',
+  bathrooms: '',
+  location: '',
+  category: '',
+  status: '',
+  search: '' // Added to support grokSearch
 });
+
+const hasFilters = computed(() => {
+  return filters.value.minPrice !== null ||
+         filters.value.maxPrice !== null ||
+         filters.value.bedrooms !== '' ||
+         filters.value.bathrooms !== '' ||
+         filters.value.location !== '' ||
+         filters.value.category !== '' ||
+         filters.value.status !== '' ||
+         filters.value.search !== ''; // Include search in hasFilters
+});
+
+const fetchLocations = async () => {
+  try {
+    const response = await makeRequest({
+      method: 'GET',
+      url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/locations`,
+      requiresAuth: false
+    });
+
+    console.log('Locations response:', response);
+    if (response.data && Array.isArray(response.data.data)) {
+      locations.value = response.data.data.map((loc: any) => ({
+        id: loc.id,
+        name: loc.name || 'Unknown Location'
+      }));
+      console.log('Mapped locations:', locations.value);
+    } else {
+      console.warn('Unexpected locations response structure:', response);
+    }
+  } catch (error) {
+    console.error('Failed to fetch locations:', error);
+  }
+};
+
+const fetchCategories = async () => {
+  try {
+    const response = await makeRequest({
+      method: 'GET',
+      url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/property-categories`,
+      requiresAuth: false
+    });
+
+    console.log('Categories response:', response);
+    if (response.data && Array.isArray(response.data.data)) {
+      categories.value = response.data.data.map((cat: any) => ({
+        id: cat.id,
+        name: cat.name || 'Unknown Category'
+      }));
+      console.log('Mapped categories:', categories.value);
+    } else {
+      console.warn('Unexpected categories response structure:', response);
+    }
+  } catch (error) {
+    console.error('Failed to fetch categories:', error);
+  }
+};
 
 const fetchProperties = async () => {
   isLoading.value = true;
   showError.value = false;
 
   try {
+    const queryParams = new URLSearchParams();
+    if (filters.value.minPrice) queryParams.append('min_price', filters.value.minPrice.toString());
+    if (filters.value.maxPrice) queryParams.append('max_price', filters.value.maxPrice.toString());
+    if (filters.value.bedrooms) queryParams.append('bedrooms', filters.value.bedrooms.toString());
+    if (filters.value.bathrooms) queryParams.append('bathrooms', filters.value.bathrooms.toString());
+    if (filters.value.location) queryParams.append('location_id', filters.value.location.toString());
+    if (filters.value.category) queryParams.append('category_id', filters.value.category.toString());
+    if (filters.value.status) queryParams.append('status', filters.value.status);
+    if (filters.value.search) queryParams.append('search', filters.value.search); // Add search parameter
+
+    console.log('Fetching properties with params:', queryParams.toString());
+
     const response = await makeRequest({
       method: 'GET',
-      url: `${import.meta.env.VITE_APP_API_BASE_URL}/${import.meta.env.VITE_APP_ALL_PROPERTIES_URL}`,
+      url: `${import.meta.env.VITE_APP_API_BASE_URL}/${import.meta.env.VITE_APP_ALL_PROPERTIES_URL}?${queryParams.toString()}`,
       requiresAuth: false
     });
+
+    console.log('Properties response:', response);
 
     if (response.data?.success && Array.isArray(response.data.data)) {
       properties.value = response.data.data.map((property: any) => {
         const cleanPrice = property.combined_price
           ? parseInt(property.combined_price.replace(/[^0-9]/g, '')) || 0
-          : 0;
+          : property.price || 0;
         const cleanArea = property.area
           ? parseInt(property.area.replace(/[^0-9]/g, '')) || 0
           : 0;
@@ -229,9 +430,7 @@ const fetchProperties = async () => {
           location: property.location || 'Unknown Location',
           price: cleanPrice,
           currency: property.combined_price?.includes('TZS') ? 'TZS' : 'USD',
-          image: property.image && !property.image.startsWith('http')
-            ? `${import.meta.env.VITE_APP_IMAGE_BASE_URL}/${property.image}`
-            : (property.image || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg=='),
+          image: property.image || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg==',
           alt: property.alt || `Image of ${property.title || 'Untitled Property'}`,
           badge: property.badge || 'New',
           rating: Math.min(Math.max(parseInt(property.rating) || 4, 1), 5),
@@ -244,11 +443,13 @@ const fetchProperties = async () => {
           total_rooms: parseInt(property.total_rooms) || 0,
           available_rooms: parseInt(property.available_rooms) || 0,
           booked_rooms: parseInt(property.booked_rooms) || 0,
-          map_url: property.map_url || 'https://maps.google.com'
+          map_url: property.map_url || 'https://maps.google.com',
+          status: property.status || 'unknown'
         };
       });
+      console.log('Mapped properties:', properties.value);
     } else {
-      console.warn('Unexpected response structure:', response.data);
+      console.warn('Unexpected properties response structure:', response.data);
       showError.value = true;
     }
   } catch (error) {
@@ -258,6 +459,41 @@ const fetchProperties = async () => {
     isLoading.value = false;
   }
 };
+
+const displayedProperties = computed((): Property[] => {
+  return showAll.value ? properties.value : properties.value.slice(0, initialDisplayCount);
+});
+
+const clearFilters = () => {
+  filters.value = {
+    minPrice: null,
+    maxPrice: null,
+    bedrooms: '',
+    bathrooms: '',
+    location: '',
+    category: '',
+    status: '',
+    search: ''
+  };
+  // Update the URL to remove query parameters
+  router.replace({ name: 'all-properties', query: {} });
+};
+
+watch(filters, () => {
+  // Update the URL with current filters
+  const query: Record<string, string | number> = {};
+  if (filters.value.minPrice) query.min_price = filters.value.minPrice;
+  if (filters.value.maxPrice) query.max_price = filters.value.maxPrice;
+  if (filters.value.bedrooms) query.bedrooms = filters.value.bedrooms;
+  if (filters.value.bathrooms) query.bathrooms = filters.value.bathrooms;
+  if (filters.value.location) query.location_id = filters.value.location;
+  if (filters.value.category) query.category_id = filters.value.category;
+  if (filters.value.status) query.status = filters.value.status;
+  if (filters.value.search) query.search = filters.value.search;
+
+  router.replace({ name: 'all-properties', query });
+  fetchProperties();
+}, { deep: true });
 
 const handleCardHover = (event: Event) => {
   const card = event.currentTarget as HTMLElement;
@@ -287,23 +523,14 @@ const goToPropertyDetails = (propertyId: string) => {
 
 const toggleShowAll = () => {
   showAll.value = !showAll.value;
-  if (showAll.value) {
-    setTimeout(() => {
-      const cards = document.querySelectorAll('.property-card');
-      cards.forEach((card, index) => {
-        setTimeout(() => {
-          card.classList.add('animate-in');
-        }, index * 150);
-      });
-    }, 0);
-  }
 };
 
 const retryLoad = () => {
   fetchProperties();
 };
 
-onMounted(() => {
+onMounted(async () => {
+  // Initialize AOS
   if (typeof AOS !== 'undefined') {
     AOS.init({
       duration: 800,
@@ -311,7 +538,15 @@ onMounted(() => {
       offset: 100
     });
   }
-  fetchProperties();
+
+  // Read query parameters and update filters
+  const query = route.query;
+  if (query.search) filters.value.search = query.search.toString();
+  if (query.category) filters.value.category = query.category.toString();
+  if (query.location) filters.value.location = query.location.toString();
+
+  // Fetch data
+  await Promise.all([fetchLocations(), fetchCategories(), fetchProperties()]);
 });
 </script>
 
@@ -529,300 +764,310 @@ $warning-color: #ffc107;
       flex: 1;
     }
     
-    .property-rating {
+        .property-rating {
       display: flex;
-      gap: 4px;
+      gap: clamp(2px, 0.5vw, 4px);
+      font-size: clamp(0.9rem, 2vw, 1rem);
       
       .star {
-        font-size: clamp(0.8rem, 2vw, 0.9rem);
-        opacity: 0.3;
+        color: $secondary-color;
+        transition: color 0.3s ease;
+        
         &.filled {
-          opacity: 1;
+          color: $accent-color;
         }
       }
     }
   }
   
   .property-location {
+    font-size: clamp(0.9rem, 2vw, 1rem);
     color: $secondary-color;
     margin-bottom: clamp(15px, 3vw, 20px);
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: clamp(0.9rem, 2vw, 1rem);
+    gap: clamp(5px, 1vw, 8px);
+    
+    i {
+      color: $primary-color;
+      font-size: clamp(1rem, 2.5vw, 1.1rem);
+    }
   }
   
   .property-features {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    gap: clamp(8px, 2vw, 12px);
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: clamp(10px, 2vw, 15px);
     margin-bottom: clamp(15px, 3vw, 20px);
-    padding: clamp(8px, 2vw, 12px);
-    background: rgba(0, 123, 255, 0.1);
-    border-radius: 8px;
     
     .feature {
       display: flex;
-      flex-direction: column;
       align-items: center;
-      gap: 6px;
-      font-size: clamp(0.8rem, 2vw, 0.9rem);
+      gap: clamp(5px, 1vw, 8px);
+      font-size: clamp(0.85rem, 2vw, 0.95rem);
+      color: $dark-color;
       
       i {
         color: $primary-color;
-        font-size: clamp(1rem, 2.5vw, 1.2rem);
+        font-size: clamp(1rem, 2.5vw, 1.1rem);
       }
       
       span {
-        font-weight: 600;
-        color: $dark-color;
-        text-align: center;
+        font-weight: 500;
       }
     }
   }
   
   .property-actions {
     display: flex;
-    justify-content: center;
-    margin-top: clamp(10px, 2vw, 15px);
+    justify-content: flex-end;
     
     .map-link {
-      background: linear-gradient(45deg, $primary-color, #667eea);
-      color: $white;
-      padding: clamp(8px, 2vw, 10px) clamp(15px, 3vw, 20px);
-      border-radius: 15px;
+      display: flex;
+      align-items: center;
+      gap: clamp(5px, 1vw, 8px);
+      color: $primary-color;
       font-size: clamp(0.9rem, 2vw, 1rem);
       font-weight: 600;
       text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 0.3s ease;
+      transition: color 0.3s ease;
       
       &:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 10px rgba(0, 123, 255, 0.3);
-      }
-      
-      &:focus {
-        outline: 2px solid $primary-color;
-        outline-offset: 2px;
+        color: darken($primary-color, 10%);
       }
       
       i {
-        font-size: clamp(1rem, 2.5vw, 1.2rem);
+        font-size: clamp(1rem, 2.5vw, 1.1rem);
       }
     }
   }
 }
 
-.no-data {
-  margin: clamp(40px, 6vw, 60px) auto;
-  padding: clamp(20px, 4vw, 30px);
+.filter-section {
+  margin-bottom: clamp(40px, 6vw, 60px);
   background: $white;
-  border-radius: 20px;
+  padding: clamp(20px, 4vw, 30px);
+  border-radius: 15px;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-  max-width: 500px;
-  text-align: center;
+  
+  .filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: clamp(15px, 3vw, 20px);
+    align-items: end;
+  }
+  
+  .filter-item {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(5px, 1vw, 8px);
+    
+    .filter-label {
+      font-size: clamp(0.9rem, 2vw, 1rem);
+      font-weight: 600;
+      color: $dark-color;
+    }
+    
+    .filter-input,
+    .filter-select {
+      padding: clamp(8px, 2vw, 10px);
+      border: 1px solid $light-color;
+      border-radius: 8px;
+      font-size: clamp(0.9rem, 2vw, 1rem);
+      color: $dark-color;
+      background: $white;
+      transition: border-color 0.3s ease;
+      
+      &:focus {
+        outline: none;
+        border-color: $primary-color;
+        box-shadow: 0 0 5px rgba($primary-color, 0.3);
+      }
+    }
+    
+    .filter-select {
+      appearance: none;
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path fill="%236c757d" d="M2 4l4 4 4-4z"/></svg>');
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: clamp(25px, 5vw, 30px);
+    }
+    
+    &.filter-button {
+      display: flex;
+      justify-content: flex-end;
+    }
+  }
+  
+  .filter-results {
+    margin-top: clamp(15px, 3vw, 20px);
+    text-align: center;
+    
+    p {
+      font-size: clamp(0.9rem, 2vw, 1rem);
+      color: $secondary-color;
+      font-weight: 500;
+    }
+  }
+}
+
+.loading {
+  padding: clamp(40px, 8vw, 60px);
+  
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid $light-color;
+    border-top: 4px solid $primary-color;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto clamp(15px, 3vw, 20px);
+  }
+  
+  p {
+    font-size: clamp(1rem, 2.5vw, 1.2rem);
+    color: $secondary-color;
+  }
+}
+
+.no-data {
+  padding: clamp(40px, 8vw, 60px);
   
   h3 {
-    font-size: clamp(1.5rem, 4vw, 1.8rem);
-    font-weight: 700;
+    font-size: clamp(1.5rem, 4vw, 2rem);
     color: $dark-color;
     margin-bottom: clamp(10px, 2vw, 15px);
   }
   
   p {
+    font-size: clamp(1rem, 2.5vw, 1.2rem);
     color: $secondary-color;
-    font-size: clamp(0.9rem, 2vw, 1rem);
-    line-height: 1.6;
+    max-width: 600px;
+    margin: 0 auto;
   }
 }
 
 .error-message {
-  margin: clamp(40px, 6vw, 60px) auto;
-  display: flex;
-  justify-content: center;
+  padding: clamp(40px, 8vw, 60px);
   
   .error-content {
-    background: $white;
-    padding: clamp(20px, 4vw, 30px);
-    border-radius: 20px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    max-width: 500px;
-    width: 100%;
-    text-align: center;
+    max-width: 600px;
+    margin: 0 auto;
     
     i {
       font-size: clamp(2rem, 5vw, 2.5rem);
       color: $warning-color;
-      margin-bottom: clamp(10px, 2vw, 15px);
+      margin-bottom: clamp(15px, 3vw, 20px);
     }
     
     h3 {
-      font-size: clamp(1.5rem, 4vw, 1.8rem);
-      font-weight: 700;
+      font-size: clamp(1.5rem, 4vw, 2rem);
       color: $dark-color;
       margin-bottom: clamp(10px, 2vw, 15px);
     }
     
     p {
+      font-size: clamp(1rem, 2.5vw, 1.2rem);
       color: $secondary-color;
-      font-size: clamp(0.9rem, 2vw, 1rem);
-      margin-bottom: clamp(15px, 3vw, 20px);
-    }
-    
-    .cta-button {
-      background: linear-gradient(45deg, $primary-color, #667eea);
-      color: $white;
-      border: none;
-      padding: clamp(10px, 2vw, 12px) clamp(20px, 4vw, 30px);
-      border-radius: 25px;
-      font-size: clamp(0.9rem, 2vw, 1rem);
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      
-      &:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 10px rgba(0, 123, 255, 0.3);
-      }
-      
-      &:focus {
-        outline: 2px solid $primary-color;
-        outline-offset: 2px;
-      }
+      margin-bottom: clamp(20px, 4vw, 30px);
     }
   }
 }
 
 .view-more {
-  display: flex;
-  justify-content: center;
+  margin-top: clamp(20px, 4vw, 30px);
+  
+  .cta-button {
+    display: flex;
+    align-items: center;
+    gap: clamp(5px, 1vw, 8px);
+    padding: clamp(10px, 2.5vw, 12px) clamp(20px, 5vw, 25px);
+    font-size: clamp(0.9rem, 2vw, 1rem);
+    font-weight: 600;
+    color: $white;
+    background: linear-gradient(45deg, $primary-color, #667eea);
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.3s ease;
+    
+    &:hover {
+      background: linear-gradient(45deg, darken($primary-color, 10%), darken(#667eea, 10%));
+      transform: translateY(-2px);
+    }
+    
+    &:focus {
+      outline: 2px solid $primary-color;
+      outline-offset: 2px;
+    }
+    
+    i {
+      font-size: clamp(1rem, 2.5vw, 1.1rem);
+    }
+  }
 }
 
 .cta-button {
-  background: linear-gradient(45deg, $primary-color, #667eea);
-  color: $white;
-  border: none;
-  padding: clamp(12px, 3vw, 15px) clamp(25px, 5vw, 35px);
-  border-radius: 25px;
-  font-size: clamp(1rem, 2.5vw, 1.1rem);
+  padding: clamp(10px, 2.5vw, 12px) clamp(20px, 5vw, 25px);
+  font-size: clamp(0.9rem, 2vw, 1rem);
   font-weight: 600;
+  color: $white;
+  background: linear-gradient(45deg, $primary-color, #667eea);
+  border: none;
+  border-radius: 25px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
+  transition: background 0.3s ease, transform 0.3s ease;
   
   &:hover {
+    background: linear-gradient(45deg, darken($primary-color, 10%), darken(#667eea, 10%));
     transform: translateY(-2px);
-    box-shadow: 0 5px 10px rgba(0, 123, 255, 0.3);
-    i {
-      transform: translateX(5px);
-    }
   }
   
   &:focus {
     outline: 2px solid $primary-color;
     outline-offset: 2px;
   }
-  
-  i {
-    transition: transform 0.3s ease;
-  }
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
+/* Responsive Adjustments */
 @media (max-width: 768px) {
-  .container {
-    padding: 0 clamp(0.5rem, 1.5vw, 0.75rem);
-  }
-  
-  .all-listings.section {
-    padding: clamp(40px, 8vw, 60px) 0;
-  }
-  
-  .section-title {
-    margin-bottom: clamp(30px, 6vw, 50px);
-    
-    .title-wrapper {
-      .main-title {
-        font-size: clamp(2rem, 5vw, 2.5rem);
-      }
-      
-      .section-description {
-        font-size: clamp(0.9rem, 2vw, 1rem);
-      }
-    }
-  }
-  
-  .property-grid {
-    grid-template-columns: 1fr;
-    gap: clamp(15px, 3vw, 20px);
+  .filter-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   }
   
   .property-card {
     min-height: 450px;
-    max-width: 100%;
   }
   
-  .image-container {
-    padding-bottom: 66.67%; /* 3:2 aspect ratio */
-  }
-  
-  .card-content {
-    padding: clamp(15px, 3vw, 20px);
+  .section-title .title-wrapper {
+    padding: 0 clamp(10px, 2vw, 15px);
     
-    .property-features {
-      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-      gap: clamp(6px, 1.5vw, 10px);
-      
-      .feature {
-        font-size: clamp(0.75rem, 1.8vw, 0.85rem);
-      }
+    .main-title {
+      font-size: clamp(2rem, 5vw, 2.5rem);
     }
   }
 }
 
 @media (max-width: 480px) {
-  .section-title {
-    .title-wrapper {
-      .main-title {
-        font-size: clamp(1.8rem, 4.5vw, 2rem);
-      }
-    }
+  .filter-grid {
+    grid-template-columns: 1fr;
   }
   
   .property-card {
-    min-height: 420px;
+    min-height: 400px;
+  }
+  
+  .image-container {
+    padding-bottom: 60%; /* Adjust aspect ratio for smaller screens */
   }
   
   .card-content {
-    .property-title {
-      font-size: clamp(1.2rem, 2.8vw, 1.3rem);
-    }
-    
-    .property-features {
-      grid-template-columns: 1fr;
-      gap: clamp(8px, 2vw, 12px);
-      
-      .feature {
-        flex-direction: row;
-        justify-content: center;
-        gap: 8px;
-      }
-    }
-    
-    .property-actions {
-      .map-link {
-        padding: clamp(6px, 1.5vw, 8px) clamp(12px, 2.5vw, 15px);
-        font-size: clamp(0.8rem, 1.8vw, 0.9rem);
-      }
-    }
+    padding: clamp(15px, 3vw, 20px);
   }
 }
 </style>

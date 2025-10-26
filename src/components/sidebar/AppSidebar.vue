@@ -14,7 +14,9 @@
   >
     <!-- Compact Sidebar Header -->
     <div class="sidebar-header">
-      <h2>Admin</h2>
+      <h2 v-if="hasAdminAccess">{{ t('adminPanel') }}</h2>
+      <h2 v-if="hasLandlordAccess">{{ t('landlordPanel') }}</h2>
+      
       <div v-if="mobile" class="sidebar-close-button">
         <VaButton icon="va-close" size="small" preset="plain" color="white" @click="closeSidebar" />
       </div>
@@ -203,9 +205,9 @@ import type { INavigationRoute } from './navigation-types';
 import type { UserRole } from '../../composables/useAuth';
 
 const props = defineProps({
-  visible: Boolean,
-  mobile: Boolean,
-  minimized: Boolean,
+  visible: { type: Boolean, default: false },
+  mobile: { type: Boolean, default: false },
+  minimized: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:visible']);
@@ -217,46 +219,45 @@ const { t } = useI18n();
 const globalStore = useGlobalStore();
 const { userRole, isAuthenticated } = useAuth();
 
-// State management
 const openItems = ref<string[]>([]);
 const isLoading = ref(true);
 
-// Settings route definition
 const settingsRoute = computed<INavigationRoute>(() => ({
   name: settingsRouteName.value,
   displayName: t('Settings') || 'Settings',
   meta: { icon: 'settings' },
 }));
 
-// Helper function to generate consistent keys for routes
 const getRouteKey = (route: INavigationRoute, index: number): string => {
   if (route.name) return `route-${route.name}`;
   if (route.path) return `route-${route.path}`;
   return `route-${index}`;
 };
 
-// Check if accordion item is open
 const isOpen = (key: string) => openItems.value.includes(key);
-
-// Check if any submenu is open
 const isAnySubmenuOpen = computed(() => openItems.value.length > 0);
 
-// Type guard to check if route is INavigationRoute
 const isNavigationRoute = (route: INavigationRoute | { name: string | null }): route is INavigationRoute => {
   return (route as INavigationRoute).displayName !== undefined;
 };
 
-// Handle item click for all menu levels
 const handleItemClick = (route: INavigationRoute, index: number | null, event: Event) => {
-  if (isNavigationRoute(route) && route.children && index !== null) {
+  const isParent = isNavigationRoute(route) && route.children && route.children.length > 0;
+  
+  if (isParent && index !== null) {
+    // Only toggle accordion, don't close sidebar
     toggleAccordion(route, index);
-  }
-  if (props.mobile) {
-    visibleSidebar.value = false;
+  } else {
+    // Leaf node clicked - close sidebar on mobile
+    if (props.mobile) {
+      // Small delay to allow navigation to complete
+      setTimeout(() => {
+        closeSidebar();
+      }, 150);
+    }
   }
 };
 
-// Toggle accordion state
 const toggleAccordion = (route: INavigationRoute, index: number) => {
   if (!route.children) return;
   const routeKey = getRouteKey(route, index);
@@ -268,48 +269,31 @@ const toggleAccordion = (route: INavigationRoute, index: number) => {
   localStorage.setItem('sidebarOpenState', JSON.stringify(openItems.value));
 };
 
-// FIXED: Improved recursive route matching function
 const routeHasActiveChild = (section: INavigationRoute): boolean => {
-  // Direct match
   if (currentRouteName.value === section.name) return true;
-  
-  // If no children, only check direct match
   if (!section.children) return false;
-  
-  // Recursively check all nested children
   const hasActiveNestedChild = (routes: INavigationRoute[]): boolean => {
     return routes.some(route => {
-      // Check if current route matches this route
       if (currentRouteName.value === route.name) return true;
-      
-      // If this route has children, check them recursively
       if (route.children && route.children.length > 0) {
         return hasActiveNestedChild(route.children);
       }
-      
       return false;
     });
   };
-  
   return hasActiveNestedChild(section.children);
 };
 
-// FIXED: Improved initialization function to handle 3-level nesting
 const initializeOpenState = () => {
   const savedState = localStorage.getItem('sidebarOpenState');
   const persistedKeys: string[] = savedState ? JSON.parse(savedState) : [];
   const activeKeys: string[] = [];
 
-  // Function to recursively find active route paths
   const findActiveRoutePaths = (routes: INavigationRoute[], parentPath: string = '') => {
     routes.forEach((route, index) => {
       const routeKey = getRouteKey(route, index);
-      
-      // If this route or any of its children is active, add to activeKeys
       if (routeHasActiveChild(route)) {
         activeKeys.push(routeKey);
-        
-        // If this route has children, check them too
         if (route.children) {
           findActiveRoutePaths(route.children, routeKey);
         }
@@ -317,10 +301,7 @@ const initializeOpenState = () => {
     });
   };
 
-  // Find all active paths
   findActiveRoutePaths(navigationRoutes.value);
-
-  // Combine active keys with persisted keys, removing duplicates
   openItems.value = [...new Set([...activeKeys, ...persistedKeys])];
 };
 
@@ -331,6 +312,14 @@ const navigationRoutes = computed(() => {
 
 const hasSettingsAccess = computed(() => {
   return ['admin', 'landlord', 'tenant'].includes(userRole.value);
+});
+
+const hasAdminAccess = computed(() => {
+  return ['admin'].includes(userRole.value);
+});
+
+const hasLandlordAccess = computed(() => {
+  return ['landlord'].includes(userRole.value);
 });
 
 const settingsRouteName = computed(() => {
@@ -360,7 +349,6 @@ const isSidebarMinimized = computed({
 
 const isActiveChildRoute = (child: INavigationRoute) => currentRouteName.value === child.name;
 
-// Reduced sidebar width for more compact appearance
 const sidebarWidth = computed(() => {
   if (props.mobile) return '80vw';
   return isAnySubmenuOpen.value ? '280px' : '240px';
@@ -375,7 +363,27 @@ const closeSidebar = () => {
   visibleSidebar.value = false;
 };
 
-// Watchers
+// Close sidebar automatically when route changes on mobile
+watch(
+  () => route.path,
+  () => {
+    if (props.mobile && visibleSidebar.value) {
+      closeSidebar();
+    }
+  }
+);
+
+// Ensure sidebar is closed when switching to mobile view
+watch(
+  () => props.mobile,
+  (newMobile) => {
+    if (newMobile) {
+      closeSidebar();
+    }
+  },
+  { immediate: true }
+);
+
 watch(
   () => route.name,
   (newRouteName) => {
@@ -402,7 +410,6 @@ watch(
   { immediate: true }
 );
 
-// Lifecycle hooks
 onMounted(async () => {
   try {
     if (!isAuthenticated.value) {
@@ -439,19 +446,19 @@ onMounted(async () => {
   }
 
   .sidebar-header {
-    padding: 12px 16px; // Reduced from 20px 24px
+    padding: 12px 16px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     justify-content: space-between;
     align-items: center;
     background: rgb(10, 37, 64);
     box-sizing: border-box;
-    min-height: 48px; // Reduced from 64px
+    min-height: 48px;
 
     h2 {
       margin: 0;
       padding: 0;
-      font-size: 1.2rem; // Reduced from 1.5rem
+      font-size: 1.2rem;
       font-weight: 700;
       color: #ffffff;
       line-height: 1.3;
@@ -468,10 +475,10 @@ onMounted(async () => {
       :deep(.va-button) {
         color: #ffffff;
         background-color: rgba(255, 255, 255, 0.12);
-        border-radius: 6px; // Reduced from 8px
-        padding: 6px; // Reduced from 8px
-        min-width: 32px; // Reduced from 36px
-        height: 32px; // Reduced from 36px
+        border-radius: 6px;
+        padding: 6px;
+        min-width: 32px;
+        height: 32px;
         border: none;
 
         &:hover {
@@ -483,13 +490,13 @@ onMounted(async () => {
 
   .sidebar-nav {
     padding: 0;
-    height: calc(100% - 48px); // Adjusted for new header height
+    height: calc(100% - 48px);
     overflow-y: auto;
     overflow-x: hidden;
     box-sizing: border-box;
 
     &::-webkit-scrollbar {
-      width: 4px; // Reduced from 6px
+      width: 4px;
     }
 
     &::-webkit-scrollbar-track {
@@ -498,7 +505,7 @@ onMounted(async () => {
 
     &::-webkit-scrollbar-thumb {
       background: rgba(255, 255, 255, 0.15);
-      border-radius: 2px; // Reduced from 3px
+      border-radius: 2px;
 
       &:hover {
         background: rgba(30, 136, 229, 0.5);
@@ -506,26 +513,26 @@ onMounted(async () => {
     }
 
     .nav-items {
-      padding: 8px 0; // Reduced from 16px 0
+      padding: 8px 0;
     }
 
     .loading {
-      padding: 20px 16px; // Reduced from 32px 24px
+      padding: 20px 16px;
       text-align: center;
 
       .spinner {
-        width: 20px; // Reduced from 24px
-        height: 20px; // Reduced from 24px
+        width: 20px;
+        height: 20px;
         border: 2px solid rgba(255, 255, 255, 0.2);
         border-top-color: #1e88e5;
         border-radius: 50%;
         animation: spin 1s linear infinite;
-        margin: 0 auto 8px; // Reduced from 12px
+        margin: 0 auto 8px;
       }
 
       p {
         color: #b0bec5;
-        font-size: 0.8rem; // Reduced from 0.9rem
+        font-size: 0.8rem;
         margin: 0;
         font-weight: 400;
         line-height: 1.4;
@@ -533,12 +540,12 @@ onMounted(async () => {
     }
 
     .no-routes {
-      padding: 20px 16px; // Reduced from 32px 24px
+      padding: 20px 16px;
       text-align: center;
 
       p {
         color: #b0bec5;
-        font-size: 0.8rem; // Reduced from 0.9rem
+        font-size: 0.8rem;
         margin: 0;
         line-height: 1.5;
         font-weight: 400;
@@ -551,8 +558,8 @@ onMounted(async () => {
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    min-height: 36px; // Reduced from 48px
-    padding: 6px 12px; // Reduced from 10px 20px
+    min-height: 36px;
+    padding: 6px 12px;
     transition: background 0.2s ease;
   }
 
@@ -561,19 +568,19 @@ onMounted(async () => {
     align-items: center;
     flex: 1;
     min-width: 0;
-    gap: 10px; // Reduced from 16px
+    gap: 10px;
   }
 
   .nav-icon {
     flex-shrink: 0;
-    width: 20px; // Reduced from 24px
+    width: 20px;
     text-align: center;
   }
 
   .nav-title {
-    font-size: 0.85rem; // Reduced from 0.95rem
+    font-size: 0.85rem;
     font-weight: 500;
-    line-height: 1.3; // Reduced from 1.4
+    line-height: 1.3;
     margin: 0;
     padding: 0;
     letter-spacing: 0.01em;
@@ -587,13 +594,13 @@ onMounted(async () => {
     flex-shrink: 0;
     margin-left: auto;
     transition: transform 0.2s ease;
-    width: 16px; // Reduced from 20px
+    width: 16px;
     text-align: center;
   }
 
   .parent-collapse {
-    margin: 2px 8px; // Reduced from 4px 12px
-    border-radius: 8px; // Reduced from 10px
+    margin: 2px 8px;
+    border-radius: 8px;
     overflow: hidden;
     transition: all 0.3s ease;
   }
@@ -602,7 +609,7 @@ onMounted(async () => {
     background: transparent;
     border: none;
     margin: 0;
-    border-radius: 8px; // Reduced from 10px
+    border-radius: 8px;
 
     &:hover {
       background: rgba(30, 136, 229, 0.15);
@@ -616,7 +623,7 @@ onMounted(async () => {
   }
 
   .parent-title {
-    font-size: 0.9rem; // Reduced from 1rem
+    font-size: 0.9rem;
     font-weight: 600;
     color: #ffffff;
   }
@@ -624,14 +631,14 @@ onMounted(async () => {
   .children-container {
     background: rgba(255, 255, 255, 0.03);
     border-left: 2px solid rgba(30, 136, 229, 0.2);
-    margin-left: 16px; // Reduced from 20px
-    padding: 4px 0; // Reduced from 6px 0
+    margin-left: 16px;
+    padding: 4px 0;
     transition: all 0.3s ease;
   }
 
   .child-item-wrapper {
     position: relative;
-    margin: 1px 0; // Reduced from 2px 0
+    margin: 1px 0;
   }
 
   .child-collapse {
@@ -642,8 +649,8 @@ onMounted(async () => {
   .child-item {
     background: transparent;
     border: none;
-    margin: 0 8px; // Reduced from 0 12px
-    border-radius: 6px; // Reduced from 8px
+    margin: 0 8px;
+    border-radius: 6px;
 
     &:hover {
       background: rgba(30, 136, 229, 0.1);
@@ -657,32 +664,32 @@ onMounted(async () => {
   }
 
   .child-title {
-    font-size: 0.8rem; // Reduced from 0.9rem
+    font-size: 0.8rem;
     font-weight: 500;
     color: #e0e0e0;
   }
 
   .child-icon {
-    font-size: 16px; // Reduced from 20px
+    font-size: 16px;
     color: #b0bec5;
   }
 
   .child-connector {
-    width: 14px; // Reduced from 18px
+    width: 14px;
     height: 2px;
     background: rgba(30, 136, 229, 0.3);
     border-radius: 1px;
     flex-shrink: 0;
-    margin-right: 8px; // Reduced from 10px
+    margin-right: 8px;
     position: relative;
 
     &::before {
       content: '';
       position: absolute;
-      left: -8px; // Adjusted for smaller margin
-      top: -10px; // Reduced from -12px
+      left: -8px;
+      top: -10px;
       width: 2px;
-      height: 20px; // Reduced from 24px
+      height: 20px;
       background: rgba(30, 136, 229, 0.2);
     }
 
@@ -694,21 +701,21 @@ onMounted(async () => {
   .grandchildren-container {
     background: rgba(255, 255, 255, 0.04);
     border-left: 2px solid rgba(100, 181, 246, 0.25);
-    margin-left: 20px; // Reduced from 28px
-    padding: 2px 0; // Reduced from 4px 0
+    margin-left: 20px;
+    padding: 2px 0;
     transition: all 0.3s ease;
   }
 
   .grandchild-item-wrapper {
     position: relative;
-    margin: 1px 0; // Reduced from 2px 0
+    margin: 1px 0;
   }
 
   .grandchild-item {
     background: transparent;
     border: none;
-    margin: 0 8px; // Reduced from 0 12px
-    border-radius: 6px; // Reduced from 8px
+    margin: 0 8px;
+    border-radius: 6px;
 
     &:hover {
       background: rgba(100, 181, 246, 0.1);
@@ -722,13 +729,13 @@ onMounted(async () => {
   }
 
   .grandchild-title {
-    font-size: 0.75rem; // Reduced from 0.85rem
+    font-size: 0.75rem;
     font-weight: 400;
     color: #cfd8dc;
   }
 
   .grandchild-icon {
-    font-size: 14px; // Reduced from 18px
+    font-size: 14px;
     color: #b0bec5;
   }
 
@@ -736,30 +743,30 @@ onMounted(async () => {
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    margin-right: 8px; // Reduced from 10px
+    margin-right: 8px;
     position: relative;
 
     .connector-line {
-      width: 10px; // Reduced from 14px
+      width: 10px;
       height: 1px;
       background: rgba(100, 181, 246, 0.4);
     }
 
     .connector-dot {
-      width: 4px; // Reduced from 5px
-      height: 4px; // Reduced from 5px
+      width: 4px;
+      height: 4px;
       border-radius: 50%;
       background: rgba(100, 181, 246, 0.6);
-      margin-left: 2px; // Reduced from 3px
+      margin-left: 2px;
     }
 
     &::before {
       content: '';
       position: absolute;
-      left: -10px; // Adjusted for smaller margin
-      top: -8px; // Reduced from -10px
+      left: -10px;
+      top: -8px;
       width: 1px;
-      height: 16px; // Reduced from 20px
+      height: 16px;
       background: rgba(100, 181, 246, 0.3);
     }
   }
@@ -767,7 +774,7 @@ onMounted(async () => {
   :deep(.va-sidebar-item--active) {
     .nav-item-wrapper {
       background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
-      border-radius: 8px; // Reduced from 10px
+      border-radius: 8px;
       
       .nav-icon,
       .nav-title {
@@ -777,10 +784,10 @@ onMounted(async () => {
   }
 
   .settings-item {
-    margin: 8px 12px; // Reduced from 12px 16px
-    border-radius: 8px; // Reduced from 10px
+    margin: 8px 12px;
+    border-radius: 8px;
     border-top: 1px solid rgba(30, 136, 229, 0.2);
-    padding-top: 8px; // Reduced from 16px
+    padding-top: 8px;
 
     &:hover {
       background: rgba(30, 136, 229, 0.15);
@@ -794,14 +801,14 @@ onMounted(async () => {
   }
 
   .settings-title {
-    font-size: 0.9rem; // Reduced from 1rem
+    font-size: 0.9rem;
     font-weight: 600;
     color: #ffffff;
   }
 
   :deep(.va-spacer) {
-    height: 16px; // Reduced from 24px
-    margin: 12px 16px; // Reduced from 16px 24px
+    height: 16px;
+    margin: 12px 16px;
     border-top: 1px solid rgba(30, 136, 229, 0.15);
     background: none;
     position: relative;
@@ -811,7 +818,7 @@ onMounted(async () => {
       position: absolute;
       top: -1px;
       left: 50%;
-      width: 32px; // Reduced from 48px
+      width: 32px;
       height: 1px;
       background: linear-gradient(90deg, transparent, #1e88e5, transparent);
       transform: translateX(-50%);

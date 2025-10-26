@@ -477,7 +477,7 @@ export default {
   },
   data() {
     return {
-      API_BASE_URL: import.meta.env.VITE_APP_API_BASE_URL || 'https://e1.japango.co.tz/api/v1',
+      API_BASE_URL: import.meta.env.VITE_APP_API_BASE_URL || 'https://app.eagersky.co.tz/api/v1',
       TOKEN_EXPIRY_DURATION: 24 * 60 * 60 * 1000,
       authStore: useAuthStore(),
       
@@ -726,15 +726,16 @@ canAccessStep() {
         case 6: {
           if (this.$refs.paymentForm) {
             const formState = this.$refs.paymentForm.getFormState();
-            if (formState.paymentCompleted && this.formData.payment.status === 'completed')
+            if (formState.paymentReceived && this.formData.payment.status === 'received')
               return 'Continue to Complete →';
-            if (formState.paymentReceived && formState.receiptUrl && this.formData.payment.status === 'received')
-              return 'Review Receipt →';
-            if (formState.paymentSubmitted && !formState.paymentCompleted)
-              return 'Processing Payment...';
+            if (formState.paymentSubmitted)
+              return 'Next to Complete Payments →';
             if (formState.loading) return 'Processing...';
           }
-          return 'Submit Payment →';
+          else {
+            return 'Submit Payment →';
+          }
+          
         }
         case 7: return 'Download Lease';
         default: return 'Next Step →';
@@ -3402,7 +3403,7 @@ async completePayment() {
         });
         let pdfUrl = response.data?.data?.url;
         pdfUrl = pdfUrl
-          .replace('c3.amali.japango.co.tz', 'e1.japango.co.tz')
+          .replace('c3.amali.japango.co.tz', 'app.eagersky.co.tz')
           .replace('http://', 'https://')
           .replace('/storage/leases/pdfs/', '/pdfs/');
         const pdfWindow = window.open(pdfUrl, '_blank');

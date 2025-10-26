@@ -3,7 +3,7 @@
     <div class="container" data-aos="fade-up">
       <div class="section-title text-center">
         <div class="title-wrapper">
-          <span class="subtitle-badge" >🏨 ROOM BOOKING</span><br>
+          <span class="subtitle-badge">🏨 ROOM BOOKING</span><br>
           <span class="main-title">{{ preSelectedRoomNumber || 'N/A' }}</span>
           <div class="title-underline"></div>
           <p class="section-description">Complete the details to book your selected room.</p>
@@ -79,14 +79,19 @@
                 <i class="bi bi-door-open"></i>
                 Room Number
               </label>
-              <input 
+              <select
                 id="room-number"
-                class="form-control" 
-                :value="preSelectedRoomNumber || 'N/A'"
-                readonly
+                class="form-select"
+                v-model="bookingForm.room_id"
+                required
                 :class="{ 'error': errors['room_id'] }"
                 aria-describedby="room-id-error"
               >
+                <option value="" disabled>Select room</option>
+                <option v-for="room in availableRooms" :key="room.id" :value="room.id">
+                  {{ room.room_number }}
+                </option>
+              </select>
               <div class="error-message" v-if="errors['room_id']" id="room-id-error">
                 <i class="bi bi-exclamation-circle"></i>
                 {{ errors['room_id'] }}
@@ -105,7 +110,7 @@
                 v-model="bookingForm.date" 
                 required
                 :class="{ 'error': errors['date'] }"
-                :min="new Date().toISOString().split('T')[0]"
+                :min="today"
                 aria-describedby="date-error"
               >
               <div class="error-message" v-if="errors['date']" id="date-error">
@@ -144,14 +149,13 @@
                   type="number" 
                   id="duration"
                   class="form-control" 
-                  v-model="bookingForm.duration" 
+                  v-model.number="bookingForm.duration" 
                   min="15" 
-                  max="30"
                   required
                   :class="{ 'error': errors['duration'] }"
                   aria-describedby="duration-error"
                 >
-                <span class="duration-unit">Min</span>
+                <span class="duration-unit">Days</span>
               </div>
               <div class="error-message" v-if="errors['duration']" id="duration-error">
                 <i class="bi bi-exclamation-circle"></i>
@@ -222,7 +226,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import makeRequest from '../../services/makeRequest';
 import AOS from 'aos';
@@ -236,6 +240,9 @@ interface AppointmentType {
 interface Room {
   id: string;
   room_number: string;
+  property_id: string;
+  property_title: string;
+  room_category_id: string; // Added to validate room category
 }
 
 interface BookingForm {
@@ -258,6 +265,10 @@ const showError = ref(false);
 const errorMessage = ref('Unable to load booking data. Please try again later.');
 const errors = ref<{ [key: string]: string }>({});
 const availableRooms = ref<Room[]>([]);
+const appointmentTypes = ref<AppointmentType[]>([]);
+const lastSubmitted = ref<{ date: string; time_slot: string } | null>(null);
+
+const today = computed(() => new Date().toISOString().split('T')[0]);
 
 const getInitialFormData = (): BookingForm => ({
   booking_property_type_id: '2', // Fixed to room bookings
@@ -271,8 +282,6 @@ const getInitialFormData = (): BookingForm => ({
 });
 
 const bookingForm = ref<BookingForm>(getInitialFormData());
-const appointmentTypes = ref<AppointmentType[]>([]);
-const lastSubmitted = ref<{ date: string; time_slot: string } | null>(null);
 
 const fallbackAppointmentTypes: AppointmentType[] = [
   { id: '1', name: 'Standard Stay' },
@@ -325,26 +334,33 @@ const fetchAvailableRooms = async () => {
       requiresAuth: true,
     });
     if (response.data && Array.isArray(response.data.data)) {
-      availableRooms.value = response.data.data.map((room: any) => ({
-        id: String(room.id),
-        room_number: room.room_number,
-      }));
+      availableRooms.value = response.data.data
+        .filter((room: any) => room.room_category_id && room.room_category_id !== '0')
+        .map((room: any) => ({
+          id: String(room.id),
+          room_number: room.room_number,
+          property_id: String(room.property_id),
+          property_title: room.property?.title || 'Unknown Property',
+          room_category_id: String(room.room_category_id),
+        }));
       if (preSelectedRoomNumber.value) {
         const selectedRoom = availableRooms.value.find(room => room.room_number === preSelectedRoomNumber.value);
         if (selectedRoom) {
           bookingForm.value.room_id = selectedRoom.id;
         } else {
-          showSwal('Room Unavailable', `Room ${preSelectedRoomNumber.value} is not available or does not exist.`, 'error');
-          errors.value['room_id'] = `Room ${preSelectedRoomNumber.value} is not available.`;
+          showSwal('Room Unavailable', `Room ${preSelectedRoomNumber.value} is not available or has an invalid category.`, 'error');
+          errors.value['room_id'] = `Room ${preSelectedRoomNumber.value} is not available or invalid.`;
           showError.value = true;
-          errorMessage.value = `Room ${preSelectedRoomNumber.value} is not available. Please select another room.`;
+          errorMessage.value = `Room ${preSelectedRoomNumber.value} is not available or has an invalid category. Please select another room.`;
         }
       }
       if (availableRooms.value.length === 0) {
-        showSwal('No Rooms Available', 'No available rooms found for this property.', 'warning');
+        showSwal('No Rooms Available', 'No valid rooms found for this property.', 'warning');
+        errors.value['room_id'] = 'No valid rooms found for this property.';
       }
     } else {
       showSwal('Invalid Data', 'Invalid room data received.', 'error');
+      errors.value['room_id'] = 'Invalid room data received.';
     }
   } catch (error: any) {
     console.error('Failed to fetch rooms:', error);
@@ -425,6 +441,15 @@ const parseAndDisplayErrors = (errorData: any, fallbackMessage: string) => {
     if (generalMessage.includes('not available at the requested time slot')) {
       errors.value['time_slot'] = generalMessage;
       showSwal('Time Slot Unavailable', generalMessage, 'error');
+    } else if (generalMessage.includes('room does not belong to the specified property')) {
+      errors.value['room_id'] = generalMessage;
+      showSwal('Invalid Room', generalMessage, 'error');
+    } else if (generalMessage.includes('room is not available')) {
+      errors.value['room_id'] = generalMessage;
+      showSwal('Room Unavailable', generalMessage, 'error');
+    } else if (generalMessage.includes('invalid category')) {
+      errors.value['room_id'] = generalMessage;
+      showSwal('Invalid Room Category', generalMessage, 'error');
     } else {
       errors.value['general'] = generalMessage;
       showSwal('Error', generalMessage, 'error');
@@ -438,65 +463,58 @@ const parseAndDisplayErrors = (errorData: any, fallbackMessage: string) => {
 const handleBooking = async () => {
   errors.value = {};
 
+  // Retrieve tenant information from localStorage
+  const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+  const tenantId = userData?.user?.id;
+  const tenantEmail = userData?.user?.email;
+  const tenantName = `${userData?.user?.first_name} ${userData?.user?.last_name}`;
+
+  // Validate tenant information
+  if (!tenantId) {
+    errors.value['general'] = 'Tenant ID not found. Please log in again.';
+    showSwal('Error', 'Tenant ID not found. Please log in again.', 'error');
+    isLoading.value = false;
+    return;
+  }
+
+  // Validate room category
+  const selectedRoom = availableRooms.value.find(room => room.id === bookingForm.value.room_id);
+  if (selectedRoom && (!selectedRoom.room_category_id || selectedRoom.room_category_id === '0')) {
+    errors.value['room_id'] = 'Selected room has an invalid category.';
+    showSwal('Invalid Room Category', 'The selected room has an invalid category. Please choose another room.', 'error');
+    isLoading.value = false;
+    return;
+  }
+
   const clientErrors: { [key: string]: string } = {};
-  if (!bookingForm.value.booking_property_type_id) clientErrors['booking_property_type_id'] = 'Booking type ID is required';
+  if (!bookingForm.value.booking_property_type_id) clientErrors['booking_property_type_id'] = 'Booking type is required';
   if (!bookingForm.value.appointment_type_id) clientErrors['appointment_type_id'] = 'Please select a booking type';
   if (!bookingForm.value.date) clientErrors['date'] = 'Please select a check-in date';
   if (!bookingForm.value.time_slot) clientErrors['time_slot'] = 'Please select a check-in time';
-  if (bookingForm.value.duration < 15 || bookingForm.value.duration > 30) clientErrors['duration'] = 'Duration must be between 15 and 30 days';
+  if (bookingForm.value.duration < 15) clientErrors['duration'] = 'Duration must be at least 15 days';
   if (!bookingForm.value.property_id) clientErrors['property_id'] = 'Property ID is required';
-  if (bookingForm.value.booking_property_type_id === '2' && !bookingForm.value.room_id) clientErrors['room_id'] = 'Room selection is required';
+  if (!bookingForm.value.room_id) clientErrors['room_id'] = 'Room selection is required';
   if (!bookingForm.value.status) clientErrors['status'] = 'Status is required';
 
   if (Object.keys(clientErrors).length > 0) {
     errors.value = clientErrors;
     Object.values(clientErrors).forEach(err => showSwal('Validation Error', err, 'error'));
+    isLoading.value = false;
     return;
   }
 
   isLoading.value = true;
 
-  if (
-    lastSubmitted.value &&
-    lastSubmitted.value.date === bookingForm.value.date &&
-    lastSubmitted.value.time_slot === bookingForm.value.time_slot
-  ) {
-    const confirm = await Swal.fire({
-      title: 'Duplicate Time Slot',
-      text: 'You are trying to book the same time slot again. Continue?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#3b82f6',
-      cancelButtonColor: '#ef4444',
-      confirmButtonText: 'Yes, continue',
-      cancelButtonText: 'Change time slot',
-      position: 'top-end',
-      toast: true,
-      timer: 10000,
-      timerProgressBar: true,
-      background: 'rgba(245, 158, 11, 0.95)',
-      color: '#fff',
-      didOpen: () => {
-        const toast = Swal.getPopup();
-        if (toast) {
-          toast.style.borderLeft = '4px solid #f59e0b';
-          toast.style.borderRadius = '12px';
-          toast.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.15)';
-          toast.style.backdropFilter = 'blur(10px)';
-        }
-      },
-    });
-    if (!confirm.isConfirmed) {
-      isLoading.value = false;
-      return;
-    }
-  }
-
   try {
     const response = await makeRequest({
       method: 'POST',
       url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/tenant/bookings`,
-      data: bookingForm.value,
+      data: {
+        ...bookingForm.value,
+        tenant_id: tenantId,
+        tenant_email: tenantEmail,
+        tenant_name: tenantName,
+      },
       requiresAuth: true,
     });
 
@@ -505,10 +523,10 @@ const handleBooking = async () => {
         date: bookingForm.value.date,
         time_slot: bookingForm.value.time_slot,
       };
-      showSwal('Success', response.data.message || 'Your room booking has been submitted successfully. We\'ll contact you soon.', 'success');
+      showSwal('Success', 'Your room booking has been submitted successfully. The admin will be notified soon.', 'success');
       clearForm();
       setTimeout(() => {
-        router.push('/my-account');
+        router.push('/tenant');
       }, 1500);
     } else {
       parseAndDisplayErrors(response.data, 'Validation error occurred during room booking.');
@@ -617,20 +635,19 @@ $indigo-100: #e0e7ff;
   
   .title-wrapper {
     margin: 10px;
-  .subtitle-badge {
-    display: inline-flex;
-    align-items: center;
-    background: linear-gradient(135deg, $accent-color, #ea580c);
-    color: $white;
-    padding: 8px 20px 4px;
-    border-radius: 50px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    margin-bottom: 20px; /* Adjust this value for desired spacing */
-    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.3);
-    animation: float 3s ease-in-out infinite;
-  }
-  
+    .subtitle-badge {
+      display: inline-flex;
+      align-items: center;
+      background: linear-gradient(135deg, $accent-color, #ea580c);
+      color: $white;
+      padding: 8px 20px 4px;
+      border-radius: 50px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 25px rgba(245, 158, 11, 0.3);
+      animation: float 3s ease-in-out infinite;
+    }
     
     .main-title {
       font-size: clamp(2.5rem, 6vw, 3.5rem);
@@ -658,9 +675,8 @@ $indigo-100: #e0e7ff;
       margin: 0 auto;
       line-height: 1.6;
     }
-    /* Add spacing around the title wrapper */
-    margin-top: 40px; /* Adjust this value for top spacing */
-    margin-bottom: 40px; /* Adjust this value for bottom spacing */
+    margin-top: 40px;
+    margin-bottom: 40px;
   }
 }
 

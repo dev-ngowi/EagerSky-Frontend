@@ -550,7 +550,7 @@ const handleBooking = async () => {
       clearForm();
       setTimeout(() => {
         console.log('Attempting redirect to my-account');
-        router.push({ name: 'my-account' }).catch(err => {
+        router.push({ name: 'tenant-dashboard' }).catch(err => {
           console.error('Navigation error:', err);
           showToast('Failed to redirect to My Account. Please navigate manually.', 'error');
         });

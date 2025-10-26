@@ -197,13 +197,40 @@
 import { defineComponent } from 'vue';
 import Swal from 'sweetalert2';
 import makeRequest from '../../../../services/makeRequest';
-import type { Booking, FormData, Errors, ErrorMessages, Option } from '../../../../types/booking';
+import type { FormData, Errors, ErrorMessages, Option } from '../../../../types/booking';
+
+// FIX: Define a local type for a Room in the Booking object that MUST have an `id`.
+// This resolves the TS2339 error.
+type BookingRoomWithId = {
+  id: number;
+  room_id: number;
+  room_number: string;
+  property_id?: number;
+  property?: { id: number; title: string };
+};
+
+// Define a local Booking type that uses the corrected Room type.
+interface FixedBooking {
+  id: number;
+  booking_property_type_id: number | string;
+  client_id: number | string;
+  appointment_type_id: number | string;
+  date: string;
+  duration: number | string;
+  time_slot: string;
+  recurrence: string;
+  status: string;
+  notes: string | null;
+  properties?: { id: number }[];
+  rooms?: BookingRoomWithId[]; // <-- Use the corrected type here
+}
 
 export default defineComponent({
   name: 'BookingEdit',
   props: {
+    // Use the locally defined FixedBooking type for the prop
     booking: {
-      type: Object as () => Booking,
+      type: Object as () => FixedBooking,
       required: true,
     },
   },
@@ -216,8 +243,10 @@ export default defineComponent({
       form: {
         id: this.booking.id,
         booking_property_type_id: Number(this.booking.booking_property_type_id) || null,
-        property_ids: this.booking.properties?.map(p => Number(p.id)) || [],
-        room_ids: this.booking.rooms?.map(r => Number(r.room_id)) || [],
+        property_ids: this.booking.properties?.map(p => Number(p.id)).filter(id => id) || [],
+        // The error occurred here. Since `rooms` now uses `BookingRoomWithId`,
+        // `r.id` is correctly typed as `number`.
+        room_ids: this.booking.rooms?.map(r => Number(r.id)).filter(id => id) || [],
         client_id: Number(this.booking.client_id) || null,
         appointment_type_id: Number(this.booking.appointment_type_id) || null,
         date: (() => {
@@ -289,6 +318,7 @@ export default defineComponent({
         { value: 'pending', text: 'Pending' },
         { value: 'confirmed', text: 'Confirmed' },
         { value: 'cancelled', text: 'Cancelled' },
+        { value: 'completed', text: 'Completed' },
       ],
       loadingBookingPropertyTypes: false,
       loadingProperties: false,
@@ -299,16 +329,56 @@ export default defineComponent({
     };
   },
   async mounted() {
+    console.log('Booking data:', JSON.stringify(this.booking, null, 2)); // Debug log
+    console.log('Initial form room_ids:', this.form.room_ids); // Debug log
+
     await Promise.all([
       this.fetchBookingPropertyTypes(),
       this.fetchProperties(),
       this.fetchUsers(),
       this.fetchAppointmentTypes(),
     ]);
-    // If room booking, fetch rooms after properties are loaded
-    if (this.form.booking_property_type_id === 2 && this.properties.length === 1) {
-      this.selectedProperty = this.properties[0].value as number;
-      await this.fetchRooms(this.selectedProperty);
+
+    // Initialize selectedProperty for room bookings
+    if (this.form.booking_property_type_id === 2 && this.booking.rooms?.length) {
+      const firstRoom = this.booking.rooms[0];
+      const propertyId = Number(firstRoom?.property?.id || firstRoom?.property_id);
+      console.log('Detected property ID:', propertyId); // Debug log
+
+      if (propertyId && this.properties.some(p => p.value === propertyId)) {
+        this.selectedProperty = propertyId;
+        await this.fetchRooms(this.selectedProperty);
+        // Ensure room_ids are valid after fetching rooms
+        const savedRoomIds = [...this.form.room_ids];
+        this.form.room_ids = savedRoomIds.filter(id => this.rooms.some(room => room.value === id));
+        console.log('Filtered room_ids:', this.form.room_ids); // Debug log
+
+        if (this.form.room_ids.length === 0 && savedRoomIds.length > 0) {
+          this.errors.room_ids = true;
+          this.errorMessages.room_ids = 'No valid rooms found for this booking';
+          Swal.fire({
+            title: 'Warning!',
+            text: this.errorMessages.room_ids,
+            icon: 'warning',
+            position: 'top-end',
+            toast: true,
+            showConfirmButton: false,
+            timer: 3000,
+          });
+        }
+      } else {
+        this.errors.selected_property = true;
+        this.errorMessages.selected_property = 'No valid property found for the selected rooms';
+        Swal.fire({
+          title: 'Warning!',
+          text: this.errorMessages.selected_property,
+          icon: 'warning',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+      }
     }
   },
   methods: {
@@ -316,46 +386,17 @@ export default defineComponent({
       this.loadingBookingPropertyTypes = true;
       try {
         const response = await makeRequest({
-          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/booking-property-types`,
+          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/booking-types`,
           method: 'get',
           requiresAuth: true,
         });
         if (response.status === 200) {
           this.bookingPropertyTypes = response.data.data.map((type: any) => ({
             value: Number(type.id),
-            text: type.name || `Type ${type.id}`,
+            text: type.name,
           }));
-          // Ensure the form's booking_property_type_id matches an option
-          if (this.form.booking_property_type_id) {
-            const selectedType = this.bookingPropertyTypes.find(
-              (type) => type.value === this.form.booking_property_type_id
-            );
-            if (!selectedType) {
-              this.form.booking_property_type_id = null;
-              this.errorMessages.booking_property_type_id = 'Invalid booking type selected';
-              Swal.fire({
-                title: 'Warning!',
-                text: 'Invalid booking type detected. Please select a valid type.',
-                icon: 'warning',
-                position: 'top-end',
-                toast: true,
-                showConfirmButton: false,
-                timer: 3000,
-              });
-            }
-          }
         } else {
-          this.errors.booking_property_type_id = true;
-          this.errorMessages.booking_property_type_id = response.data?.message || 'Failed to fetch booking property types.';
-          Swal.fire({
-            title: 'Error!',
-            text: this.errorMessages.booking_property_type_id,
-            icon: 'error',
-            position: 'top-end',
-            toast: true,
-            showConfirmButton: false,
-            timer: 3000,
-          });
+          throw new Error(response.data?.message || 'Failed to fetch booking property types');
         }
       } catch (error: any) {
         console.error('Failed to fetch booking property types:', error.message);
@@ -385,20 +426,10 @@ export default defineComponent({
         if (response.status === 200) {
           this.properties = response.data.data.map((property: any) => ({
             value: Number(property.id),
-            text: property.title || `Property ${property.id}`,
+            text: property.title,
           }));
         } else {
-          this.errors.property_ids = true;
-          this.errorMessages.property_ids = response.data?.message || 'Failed to fetch properties.';
-          Swal.fire({
-            title: 'Error!',
-            text: this.errorMessages.property_ids,
-            icon: 'error',
-            position: 'top-end',
-            toast: true,
-            showConfirmButton: false,
-            timer: 3000,
-          });
+          throw new Error(response.data?.message || 'Failed to fetch properties');
         }
       } catch (error: any) {
         console.error('Failed to fetch properties:', error.message);
@@ -424,8 +455,6 @@ export default defineComponent({
         return;
       }
       this.loadingRooms = true;
-      this.form.room_ids = [];
-      this.rooms = [];
       try {
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/properties/${propertyId}/rooms`,
@@ -437,23 +466,31 @@ export default defineComponent({
             value: Number(room.id),
             text: room.room_number || `Room ${room.id}`,
           }));
-          // Restore room_ids if they match the fetched rooms
+          console.log('Available rooms:', this.rooms); // Debug log
+          console.log('Current room_ids to match:', this.form.room_ids); // Debug log
+
+          // Restore valid room_ids after fetching rooms
           if (this.form.booking_property_type_id === 2) {
-            const savedRoomIds = this.booking.rooms?.map(r => Number(r.room_id)) || [];
+            const savedRoomIds = [...this.form.room_ids];
             this.form.room_ids = savedRoomIds.filter(id => this.rooms.some(room => room.value === id));
+            console.log('Filtered room_ids:', this.form.room_ids); // Debug log
+
+            if (this.form.room_ids.length === 0 && savedRoomIds.length > 0) {
+              this.errors.room_ids = true;
+              this.errorMessages.room_ids = 'No valid rooms found for this booking';
+              Swal.fire({
+                title: 'Warning!',
+                text: this.errorMessages.room_ids,
+                icon: 'warning',
+                position: 'top-end',
+                toast: true,
+                showConfirmButton: false,
+                timer: 3000,
+              });
+            }
           }
         } else {
-          this.errors.room_ids = true;
-          this.errorMessages.room_ids = response.data?.message || 'Failed to fetch rooms.';
-          Swal.fire({
-            title: 'Error!',
-            text: this.errorMessages.room_ids,
-            icon: 'error',
-            position: 'top-end',
-            toast: true,
-            showConfirmButton: false,
-            timer: 3000,
-          });
+          throw new Error(response.data?.message || 'Failed to fetch rooms');
         }
       } catch (error: any) {
         console.error('Failed to fetch rooms:', error.message);
@@ -483,25 +520,15 @@ export default defineComponent({
         if (response.status === 200) {
           this.users = response.data.data.map((user: any) => ({
             value: Number(user.id),
-            text: `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'None',
+            text: `${user.first_name} ${user.last_name}`.trim() || user.email,
           }));
         } else {
-          this.errors.client_id = true;
-          this.errorMessages.client_id = response.data?.message || 'Failed to fetch clients.';
-          Swal.fire({
-            title: 'Error!',
-            text: this.errorMessages.client_id,
-            icon: 'error',
-            position: 'top-end',
-            toast: true,
-            showConfirmButton: false,
-            timer: 3000,
-          });
+          throw new Error(response.data?.message || 'Failed to fetch users');
         }
       } catch (error: any) {
         console.error('Failed to fetch users:', error.message);
         this.errors.client_id = true;
-        this.errorMessages.client_id = 'Failed to load clients';
+        this.errorMessages.client_id = 'Failed to load users';
         Swal.fire({
           title: 'Error!',
           text: this.errorMessages.client_id,
@@ -526,20 +553,10 @@ export default defineComponent({
         if (response.status === 200) {
           this.appointmentTypes = response.data.data.map((type: any) => ({
             value: Number(type.id),
-            text: type.name || `Type ${type.id}`,
+            text: type.name,
           }));
         } else {
-          this.errors.appointment_type_id = true;
-          this.errorMessages.appointment_type_id = response.data?.message || 'Failed to fetch appointment types.';
-          Swal.fire({
-            title: 'Error!',
-            text: this.errorMessages.appointment_type_id,
-            icon: 'error',
-            position: 'top-end',
-            toast: true,
-            showConfirmButton: false,
-            timer: 3000,
-          });
+          throw new Error(response.data?.message || 'Failed to fetch appointment types');
         }
       } catch (error: any) {
         console.error('Failed to fetch appointment types:', error.message);
@@ -558,7 +575,7 @@ export default defineComponent({
         this.loadingAppointmentTypes = false;
       }
     },
-    onBookingTypeChange() {
+    async onBookingTypeChange() {
       this.form.property_ids = [];
       this.form.room_ids = [];
       this.selectedProperty = null;
@@ -570,95 +587,131 @@ export default defineComponent({
       this.errors.selected_property = false;
       this.errorMessages.selected_property = '';
     },
-    async submitForm() {
-      this.errors = {
-        booking_property_type_id: false,
-        property_ids: false,
-        room_ids: false,
-        selected_property: false,
-        client_id: false,
-        appointment_type_id: false,
-        date: false,
-        duration: false,
-        time_slot: false,
-        recurrence: false,
-        status: false,
-        notes: false,
-      };
-      this.errorMessages = {
-        booking_property_type_id: '',
-        property_ids: '',
-        room_ids: '',
-        selected_property: '',
-        client_id: '',
-        appointment_type_id: '',
-        date: '',
-        duration: '',
-        time_slot: '',
-        recurrence: '',
-        status: '',
-        notes: '',
-      };
+    validateForm(): boolean {
+      this.resetErrors();
+
+      let isValid = true;
 
       if (!this.form.booking_property_type_id) {
         this.errors.booking_property_type_id = true;
         this.errorMessages.booking_property_type_id = 'Booking type is required';
+        isValid = false;
       }
-      if (this.form.booking_property_type_id === 1 && !this.form.property_ids.length) {
+
+      if (this.form.booking_property_type_id === 1 && (!this.form.property_ids || this.form.property_ids.length === 0)) {
         this.errors.property_ids = true;
         this.errorMessages.property_ids = 'At least one property is required';
+        isValid = false;
       }
+
+      if (this.form.booking_property_type_id === 2 && (!this.form.room_ids || this.form.room_ids.length === 0)) {
+        this.errors.room_ids = true;
+        this.errorMessages.room_ids = 'At least one room is required';
+        isValid = false;
+      }
+
       if (this.form.booking_property_type_id === 2 && !this.selectedProperty) {
         this.errors.selected_property = true;
         this.errorMessages.selected_property = 'A property must be selected to choose rooms';
+        isValid = false;
       }
-      if (this.form.booking_property_type_id === 2 && !this.form.room_ids.length) {
-        this.errors.room_ids = true;
-        this.errorMessages.room_ids = 'At least one room is required';
-      }
+
       if (!this.form.client_id) {
         this.errors.client_id = true;
         this.errorMessages.client_id = 'Client is required';
+        isValid = false;
       }
+
       if (!this.form.appointment_type_id) {
         this.errors.appointment_type_id = true;
         this.errorMessages.appointment_type_id = 'Appointment type is required';
+        isValid = false;
       }
+
       if (!this.form.date) {
         this.errors.date = true;
         this.errorMessages.date = 'Date is required';
+        isValid = false;
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        if (this.form.date < today) {
+          this.errors.date = true;
+          this.errorMessages.date = 'Date cannot be in the past';
+          isValid = false;
+        }
       }
-      if (
-        this.form.duration === null ||
-        (this.form.booking_property_type_id === 1 && (this.form.duration < 15 || this.form.duration > 180)) ||
-        (this.form.booking_property_type_id === 2 && this.form.duration < 1)
+
+      if (!this.form.duration || this.form.duration <= 0) {
+        this.errors.duration = true;
+        this.errorMessages.duration = 'Duration must be greater than 0';
+        isValid = false;
+      } else if (
+        this.form.booking_property_type_id === 1 &&
+        (this.form.duration < 15 || this.form.duration > 180)
       ) {
         this.errors.duration = true;
-        this.errorMessages.duration = this.form.booking_property_type_id === 2
-          ? 'Duration must be at least 1 day for room bookings'
-          : 'Duration must be between 15 and 180 minutes for property bookings';
+        this.errorMessages.duration = 'Duration must be between 15 and 180 minutes for property bookings';
+        isValid = false;
+      } else if (this.form.booking_property_type_id === 2 && this.form.duration < 1) {
+        this.errors.duration = true;
+        this.errorMessages.duration = 'Duration must be at least 1 day for room bookings';
+        isValid = false;
       }
+
       if (!this.form.time_slot) {
         this.errors.time_slot = true;
         this.errorMessages.time_slot = 'Time slot is required';
+        isValid = false;
+      } else if (!/^\d{2}:\d{2}$/.test(this.form.time_slot)) {
+        this.errors.time_slot = true;
+        this.errorMessages.time_slot = 'Time slot must be in HH:mm format';
+        isValid = false;
       }
+
       if (!this.form.recurrence) {
         this.errors.recurrence = true;
         this.errorMessages.recurrence = 'Recurrence is required';
+        isValid = false;
       }
+
       if (!this.form.status) {
         this.errors.status = true;
         this.errorMessages.status = 'Status is required';
+        isValid = false;
       }
 
-      if (Object.values(this.errors).some((error) => error)) {
-        return;
+      if (this.form.notes && this.form.notes.length > 500) {
+        this.errors.notes = true;
+        this.errorMessages.notes = 'Notes cannot exceed 500 characters';
+        isValid = false;
       }
+
+      if (!isValid) {
+        Swal.fire({
+          title: 'Validation Error',
+          text: 'Please correct the errors in the form',
+          icon: 'error',
+          position: 'top-end',
+          toast: true,
+          showConfirmButton: false,
+          timer: 3000,
+        });
+      }
+
+      return isValid;
+    },
+    resetErrors() {
+      Object.keys(this.errors).forEach(key => {
+        this.errors[key as keyof Errors] = false;
+        this.errorMessages[key as keyof ErrorMessages] = '';
+      });
+    },
+    async submitForm() {
+      if (!this.validateForm()) return;
 
       this.isSubmitting = true;
       try {
         const payload = {
-          id: this.form.id,
           booking_property_type_id: this.form.booking_property_type_id,
           property_ids: this.form.booking_property_type_id === 1 ? this.form.property_ids : [],
           room_ids: this.form.booking_property_type_id === 2 ? this.form.room_ids : [],
@@ -675,41 +728,30 @@ export default defineComponent({
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/bookings/${this.form.id}`,
           method: 'put',
-          requiresAuth: true,
           data: payload,
+          requiresAuth: true,
         });
 
         if (response.status === 200) {
           Swal.fire({
             title: 'Success!',
-            text: 'Booking updated successfully.',
+            text: 'Booking updated successfully',
             icon: 'success',
             position: 'top-end',
             toast: true,
             showConfirmButton: false,
             timer: 3000,
           });
-          this.$emit('submit', payload);
+          this.$emit('submit', response.data.data);
           this.$emit('close');
         } else {
           throw new Error(response.data?.message || 'Failed to update booking');
         }
       } catch (error: any) {
-        console.error('Submission error:', error.message, error.response?.data);
-        if (error.response?.data?.errors) {
-          Object.entries(error.response.data.errors).forEach(([key, value]) => {
-            if (key in this.errors) {
-              this.errors[key as keyof Errors] = true;
-              this.errorMessages[key as keyof ErrorMessages] = Array.isArray(value) ? value[0] : value;
-            }
-          });
-        } else {
-          this.errors.booking_property_type_id = true;
-          this.errorMessages.booking_property_type_id = error.response?.data?.message || 'An unexpected error occurred';
-        }
+        console.error('Failed to update booking:', error.message);
         Swal.fire({
           title: 'Error!',
-          text: this.errorMessages.booking_property_type_id || 'An unexpected error occurred',
+          text: error.message || 'Failed to update booking',
           icon: 'error',
           position: 'top-end',
           toast: true,
@@ -725,32 +767,18 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.grid {
-  display: grid;
-}
-.grid-cols-1 {
-  grid-template-columns: 1fr;
-}
-.md\:grid-cols-2 {
-  @media (min-width: 768px) {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-.gap-4 {
-  gap: 1rem;
-}
 .spinner {
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid #fff;
-  border-top: 2px solid transparent;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #00A3E0;
   border-radius: 50%;
+  width: 20px;
+  height: 20px;
   animation: spin 1s linear infinite;
-  margin-right: 0.5rem;
+  display: inline-block;
 }
+
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>

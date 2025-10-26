@@ -552,15 +552,6 @@ export default defineComponent({
       }
     },
     async submitForm() {
-      console.log('=== SUBMIT FORM START ===');
-      console.log('Form data:', this.form);
-      console.log('Image count:', this.form.images.length);
-      console.log('Button disabled conditions:', {
-        isSubmitting: this.isSubmitting,
-        hasRoomId: !!this.form.room_id,
-        hasImages: !!this.form.images.length
-      });
-      
       // Reset errors and validate
       this.errors = { property_id: '', room_id: '', caption: '', image: [] };
       
@@ -594,8 +585,8 @@ export default defineComponent({
                        this.errors.caption !== '' || 
                        this.errors.image.length > 0;
                        
-      console.log('Validation errors:', JSON.parse(JSON.stringify(this.errors)));
-      console.log('Has errors:', hasErrors);
+      // console.log('Validation errors:', JSON.parse(JSON.stringify(this.errors)));
+      // console.log('Has errors:', hasErrors);
       
       if (hasErrors) {
         console.error('Form validation failed');
@@ -607,39 +598,29 @@ export default defineComponent({
       
       try {
         const userProfile = this.authStore.userProfile;
-        console.log('User profile:', userProfile);
         
-        if (!userProfile?.id) {
-          console.error('User profile not found');
-          throw new Error('User profile not found. Please log in again.');
-        }
+        // if (!userProfile?.id) {
+        //   console.error('User profile not found');
+        //   throw new Error('User profile not found. Please log in again.');
+        // }
         
         const chunkSize = 2 * 1024 * 1024; // 2MB chunks
         const uploadedImages: Image[] = [];
-        
-        console.log(`Processing ${this.form.images.length} images`);
-        
+                
         for (const [index, image] of this.form.images.entries()) {
-          console.log(`Processing image ${index + 1}/${this.form.images.length}: ${image.name}`);
           
           const extension = image.name.split('.').pop()?.toLowerCase() || '';
           const filename = `${uuidv4()}_room-testimonials-${index + 1}.${extension}`;
           const totalChunks = Math.ceil(image.size / chunkSize);
-          
-          console.log(`Image ${image.name} will be uploaded in ${totalChunks} chunks`);
-          
+                    
           for (let i = 0; i < totalChunks; i++) {
             const start = i * chunkSize;
             const end = Math.min(start + chunkSize, image.size);
             const chunk = image.slice(start, end);
-            
-            console.log(`Uploading chunk ${i + 1}/${totalChunks} for ${image.name}`);
-            
+                        
             try {
               await this.uploadChunk(image, chunk, i, totalChunks, filename, this.form.property_id!, this.form.room_id!, userProfile.id, this.form.caption);
-              console.log(`Chunk ${i + 1}/${totalChunks} uploaded successfully`);
             } catch (chunkError) {
-              console.error(`Error uploading chunk ${i + 1}/${totalChunks}:`, chunkError);
               throw chunkError;
             }
           }
@@ -656,11 +637,8 @@ export default defineComponent({
             user_id: userProfile.id,
           });
           
-          console.log(`Image ${index + 1} processed successfully`);
         }
-        
-        console.log('All images uploaded successfully');
-        
+                
         Swal.fire({
           title: 'Success!',
           text: `${this.form.images.length} room image(s) uploaded successfully.`,
@@ -674,12 +652,6 @@ export default defineComponent({
         this.resetForm();
         this.$emit('close', uploadedImages);
       } catch (error: any) {
-        console.error('=== SUBMIT FORM ERROR ===');
-        console.error('Error message:', error.message);
-        console.error('Error response:', error.response?.data);
-        console.error('Error status:', error.response?.status);
-        console.error('Full error:', error);
-        
         const errorMessage = error.response?.status === 413
           ? 'The uploaded data is too large. Please try uploading smaller images or contact support.'
           : error.response?.status === 401
@@ -696,7 +668,6 @@ export default defineComponent({
         this.imagePreviews = [];
         this.form.images = [];
       } finally {
-        console.log('=== SUBMIT FORM END ===');
         this.isSubmitting = false;
         this.uploadProgress = 0;
       }

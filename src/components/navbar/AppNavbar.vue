@@ -1,26 +1,26 @@
 <template>
-  <VaNavbar class="app-layout-navbar py-2 px-0" style="background-color: rgb(10, 37, 64); color: #ffffff">
+  <VaNavbar class="app-layout-navbar py-2 px-0">
     <template #left>
       <div class="left">
-        <!-- Mobile Menu Icon -->
         <div v-if="isMobile" class="mobile-menu-toggle">
           <VaButton
             preset="plain"
-            color="#ffffff"
+            color="secondary"
             :icon="sidebarOpen ? 'close' : 'menu'"
             size="medium"
             class="mobile-menu-btn"
             @click="$emit('toggle-sidebar')"
+            aria-label="Toggle sidebar"
           />
         </div>
 
-        <!-- Logo and Title -->
         <div class="brand-section">
-          <EagerLogo :width="isMobile ? '32px' : '40px'" :height="isMobile ? '28px' : '40px'" class="admin_logo" />
-          <h3 v-if="!isMobile" class="app-title">Eager<span style="color: #2563eb;">Sky</span></h3>
+          <EagerLogo class="admin_logo" />
+          <h3 v-if="!isMobile || isMediumMobile" class="app-title">
+            Eager<span class="accent-color">Sky</span>
+          </h3>
         </div>
 
-        <!-- Desktop Menu Collapse Icon -->
         <VaIconMenuCollapsed
           v-if="!isMobile"
           class="cursor-pointer MenuCollapsed"
@@ -30,6 +30,7 @@
         />
       </div>
     </template>
+
     <template #right>
       <AppNavbarActions class="app-navbar__actions" :is-mobile="isMobile" />
     </template>
@@ -42,96 +43,122 @@ import AppNavbarActions from './components/AppNavbarActions.vue';
 import VaIconMenuCollapsed from '../icons/VaIconMenuCollapsed.vue';
 import EagerLogo from '../EagerLogo.vue';
 
-defineProps({
+const props = defineProps({
   isMobile: { type: Boolean, default: false },
-  sidebarOpen: Boolean,
-  isSidebarMinimized: Boolean,
+  sidebarOpen: { type: Boolean, default: false },
+  isSidebarMinimized: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['toggle-sidebar']);
+
 const collapseIconColor = computed(() => '#FFFFFF');
+const isMediumMobile = computed(() => window.innerWidth > 1024);
 </script>
 
 <style lang="scss" scoped>
-.va-navbar {
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 1rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-  transition: padding 0.3s ease;
+$navbar-bg: #0a2540;
+$accent-color: #2563eb;
+$white: #ffffff;
+$breakpoint-mobile: 768px;
+$breakpoint-small: 480px;
+$breakpoint-x-small: 360px;
 
-  @media screen and (max-width: 640px) {
-    padding: 0.5rem 0.75rem;
-  }
+.app-layout-navbar {
+  background-color: $navbar-bg !important;
+  color: $white;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  min-height: 60px;
+  padding: 0.75rem 1.5rem !important;
+  width: 100%;
 
-  @media screen and (max-width: 480px) {
-    padding: 0.5rem 0.5rem;
+  @media screen and (max-width: $breakpoint-mobile) {
+    padding: 0.5rem 0.75rem !important;
   }
 }
 
 .left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
   flex: 1;
 
-  @media screen and (max-width: 640px) {
-    gap: 0.5rem;
-    justify-content: flex-start;
+  @media screen and (max-width: $breakpoint-mobile) {
+    gap: 0.75rem;
   }
 
-  @media screen and (max-width: 480px) {
+  @media screen and (max-width: $breakpoint-small) {
     gap: 0.25rem;
   }
 }
 
-.mobile-menu-toggle {
-  display: none;
-  align-items: center;
-  margin-right: 0.5rem;
+.accent-color {
+  color: $accent-color;
+}
 
-  @media screen and (max-width: 640px) {
-    display: flex;
+.brand-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.app-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: $white;
+  margin: 0;
+  white-space: nowrap;
+  line-height: 1;
+
+  @media screen and (max-width: 1024px) {
+    display: none !important;
+  }
+}
+
+.admin_logo {
+  flex-shrink: 0;
+  overflow: hidden; 
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  width: 58px;
+  height: 48px;
+
+  @media screen and (max-width: $breakpoint-mobile) {
+    width: 100px !important;
+    height: 40px !important;
   }
 
-  @media screen and (max-width: 480px) {
-    margin-right: 0.25rem;
+  @media screen and (max-width: $breakpoint-x-small) {
+    width: 36px !important;
+    height: 36px !important;
+  }
+}
+
+.MenuCollapsed {
+  margin-left: 1rem;
+  font-size: 24px;
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+  color: $white;
+  cursor: pointer;
+}
+
+.mobile-menu-toggle {
+  display: none;
+
+  @media screen and (max-width: $breakpoint-mobile) {
+    display: flex;
   }
 }
 
 :deep(.mobile-menu-btn) {
-  background-color: rgba(255, 255, 255, 0.12) !important;
-  color: #ffffff !important;
-  border-radius: 8px !important;
-  padding: 8px !important;
-  min-width: 40px !important;
-  height: 40px !important;
-  transition: all 0.3s ease !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  min-width: 44px !important;
+  height: 44px !important;
 
-  &:hover {
-    background-color: rgba(30, 136, 229, 0.3) !important;
-    transform: scale(1.05) !important;
-    border-color: rgba(255, 255, 255, 0.4) !important;
-  }
-
-  &:active {
-    transform: scale(0.95) !important;
-    background-color: rgba(255, 255, 255, 0.25) !important;
-  }
-
-  .va-icon {
-    color: #ffffff !important;
-    font-size: 22px !important;
-    width: 22px !important;
-    height: 22px !important;
-  }
-
-  @media screen and (max-width: 480px) {
-    min-width: 36px !important;
-    height: 36px !important;
+  @media screen and (max-width: $breakpoint-small) {
+    min-width: 40px !important;
+    height: 40px !important;
     padding: 6px !important;
 
     .va-icon {
@@ -142,114 +169,18 @@ const collapseIconColor = computed(() => '#FFFFFF');
   }
 }
 
-.brand-section {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-
-  @media screen and (max-width: 640px) {
-    gap: 0.25rem;
-  }
-
-  @media screen and (max-width: 480px) {
-    gap: 0.15rem;
-  }
-}
-
-.admin_logo {
-  font-weight: 700;
-  color: white;
-  border-radius: 48%;
-  transition: all 0.3s ease;
-  flex-shrink: 0;
-
-  @media screen and (max-width: 640px) {
-    width: 32px;
-    height: 28px;
-  }
-
-  @media screen and (max-width: 480px) {
-    width: 28px;
-    height: 24px;
-  }
-}
-
-.app-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: white;
-  margin: 0;
-  white-space: nowrap;
-
-  @media screen and (max-width: 768px) {
-    font-size: 1.2rem;
-  }
-}
-
-.MenuCollapsed {
-  margin-left: 1rem;
-  transition: transform 0.3s ease;
-  flex-shrink: 0;
-
-  @media screen and (max-width: 768px) {
-    margin-left: 0.5rem;
-  }
-}
-
 .app-navbar__actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   flex-shrink: 0;
 
-  @media screen and (max-width: 640px) {
-    gap: 0.25rem;
-  }
-
-  @media screen and (max-width: 480px) {
-    gap: 0.15rem;
-
-    & > * {
-      padding: 0.15rem;
-    }
-  }
-}
-
-@media screen and (max-width: 640px) {
-  .left {
-    position: relative;
-    z-index: 10;
+  @media screen and (max-width: $breakpoint-mobile) {
     gap: 0.5rem;
   }
 
-  .app-title {
-    display: none !important;
-  }
-
-  .admin_logo {
-    width: 32px;
-    height: 28px;
-  }
-
-  .mobile-menu-toggle {
-    position: relative;
-    z-index: 11;
-    margin-right: 0.5rem;
-  }
-}
-
-@media screen and (max-width: 320px) {
-  .left {
-    gap: 0.2rem;
-  }
-
-  .mobile-menu-toggle {
-    margin-right: 0.15rem;
-  }
-
-  .admin_logo {
-    width: 24px;
-    height: 20px;
+  @media screen and (max-width: $breakpoint-small) {
+    gap: 0.15rem;
   }
 }
 </style>

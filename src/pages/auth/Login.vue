@@ -5,7 +5,6 @@
       <VaTab name="normal">Login</VaTab>
       <VaTab name="pin">PIN</VaTab>
     </VaTabs>
-
     <VaForm ref="formRef" @submit.prevent="submit">
       <template v-if="selectedTab === 'normal'">
         <div class="mb-3">
@@ -19,7 +18,6 @@
             class="w-full"
           />
         </div>
-
         <VaValue v-slot="isPasswordVisible" :default-value="false">
           <div class="mb-3" v-bind="$attrs">
             <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
@@ -41,7 +39,6 @@
             </VaInput>
           </div>
         </VaValue>
-
         <div class="flex justify-between items-center mb-3">
           <label>
             <input
@@ -55,7 +52,6 @@
           </RouterLink>
         </div>
       </template>
-
       <template v-else>
         <div class="mb-3">
           <label for="pin" class="block text-sm font-medium text-gray-700 mb-1">Enter your PIN</label>
@@ -72,7 +68,6 @@
           />
         </div>
       </template>
-
       <div class="mt-4">
         <VaButton :loading="isLoggingIn" :disabled="isLoggingIn" class="w-full" type="submit"> Login </VaButton>
       </div>
@@ -83,7 +78,6 @@
     </p>
   </div>
 </template>
-
 <script lang="ts">
 import { defineComponent, ref, reactive, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
@@ -92,7 +86,6 @@ import { useAuthStore } from '../../stores/auth-store';
 import { validators } from '../../services/utils';
 import EagerLogo from '../../components/EagerLogo.vue';
 import type { UserData, ErrorResponseData, ApiResponse } from '../../types/auth';
-
 export default defineComponent({
   name: 'Login',
   components: { EagerLogo },
@@ -103,19 +96,15 @@ export default defineComponent({
     const route = useRoute();
     const { init: toast } = useToast();
     const authStore = useAuthStore();
-
     const formData = reactive({
       email: '',
       password: '',
       keepLoggedIn: false,
     });
-
     const pinData = reactive({
       pin: '',
     });
-
     const isLoggingIn = computed(() => authStore.loggingIn);
-
     onMounted(() => {
       if (authStore.isAuthenticated) {
         console.log('User already authenticated, redirecting to dashboard');
@@ -126,10 +115,8 @@ export default defineComponent({
         authStore.clearAuthData();
       }
     });
-
     async function submit() {
       if (isLoggingIn.value) return;
-
       try {
         const isValid = await formRef.value.validate();
         if (!isValid) {
@@ -141,7 +128,6 @@ export default defineComponent({
         toast({ message: 'Form validation failed', color: 'danger' });
         return;
       }
-
       try {
         let response: ApiResponse<UserData | ErrorResponseData>;
         if (selectedTab.value === 'normal') {
@@ -156,12 +142,9 @@ export default defineComponent({
             pin: pinData.pin,
           });
         }
-
         console.log('Login response:', response);
-
-        if (response.status === 200 && response.data?.data) {
-          const userData = response.data.data as UserData;
-
+        if (response.status === 200 && (response.data as any)?.data) {
+          const userData = (response.data as any).data as UserData;
           if ('id' in userData && 'role' in userData && userData.role) {
             if (userData.requires_2fa) {
               toast({ message: 'Please verify your email with the OTP sent', color: 'info' });
@@ -171,17 +154,12 @@ export default defineComponent({
               });
               return;
             }
-
             authStore.storeUserData(userData);
-
             await new Promise((resolve) => setTimeout(resolve, 100));
-
             toast({ message: 'Login successful', color: 'success' });
-
             const redirectPathRaw = route.query.redirect as string | null || localStorage.getItem('redirect');
             const redirectPath: string | undefined = redirectPathRaw ?? undefined;
             const enrollmentFlag = localStorage.getItem('enrollmentInProgress');
-
             if (enrollmentFlag === 'true') {
               localStorage.setItem('enrollmentInProgress', 'false');
               const redirectTo = authStore.getPostLoginRedirect(redirectPath);
@@ -194,7 +172,6 @@ export default defineComponent({
               const redirectTo = authStore.getPostLoginRedirect(redirectPath);
               await router.replace(redirectTo);
             }
-
             localStorage.removeItem('redirect');
           } else {
             throw new Error('Invalid user data: id and role are required');
@@ -224,10 +201,9 @@ export default defineComponent({
                             error.message === 'No matching user found in response'
                               ? 'User not found. Please check your credentials.'
                               : error.message === 'Invalid user data: id and role are required'
-                              ? 'Invalid user data received from server. Please try again.'
-                              : 'Login failed. Please check your credentials or contact support.';
+                                ? 'Invalid user data received from server. Please try again.'
+                                : 'Login failed. Please check your credentials or contact support.';
         toast({ message: errorMessage, color: 'danger' });
-
         if (selectedTab.value === 'normal') {
           formData.password = '';
         } else {
@@ -237,7 +213,6 @@ export default defineComponent({
         authStore.loggingIn = false;
       }
     }
-
     return {
       selectedTab,
       formRef,
@@ -250,7 +225,6 @@ export default defineComponent({
   },
 });
 </script>
-
 <style scoped>
 .login-container {
   padding: 1rem;

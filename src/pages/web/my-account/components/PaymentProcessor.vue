@@ -203,7 +203,7 @@
             
             <div class="payment-summary">
               <h3>Payment Summary</h3>
-              <div class="summary-grid">
+              <div class="summary-list">
                 <div class="summary-item">
                   <span class="summary-label">Transaction ID:</span>
                   <span class="summary-value">{{ localPayment.transaction_id }}</span>
@@ -214,7 +214,7 @@
                 </div>
                 <div class="summary-item">
                   <span class="summary-label">Payment Method:</span>
-                  <span class="summary-value">{{ selectedPaymentType }}</span>
+                  <span class="summary-value">{{ selectedPaymentType || 'Not specified' }}</span>
                 </div>
                 <div class="summary-item">
                   <span class="summary-label">Total Amount:</span>
@@ -236,9 +236,6 @@
                 <span v-if="loading && loadingText === 'Generating receipt...'">Generating...</span>
                 <span v-else>Download Receipt Again</span>
               </button>
-              <button class="btn btn-secondary" @click="viewAgreement">
-                View Rental Agreement
-              </button>
             </div>
             
             <div class="next-steps">
@@ -259,7 +256,6 @@
 <script lang="ts">
 import { defineComponent, computed, ref, watch, onMounted, defineExpose, nextTick, onUnmounted } from 'vue';
 import makeRequest from '../../../../services/makeRequest';
-import { AuthMiddleware } from '../../../../utils/authMiddleware';
 import { v4 as uuidv4 } from 'uuid';
 import jsPDF from 'jspdf';
 import EagerLogo from '../../../../components/EagerLogo.vue';
@@ -284,7 +280,8 @@ interface Payment {
   room_number?: string;
   status?: string;
   receipt_url?: string | null;
-  receipt_number?: string;
+  receipt_number?: string | null;
+  payment_id?: number | null;
 }
 interface TermPeriod {
   base_amount?: number;
@@ -305,6 +302,15 @@ interface PaymentType {
 interface AuthStore {
   token: string;
   userProfile?: { id: string | number; roles?: string[] };
+}
+interface AxiosErrorResponse {
+  status: number;
+  statusText?: string;
+  data?: any;
+}
+interface AxiosError {
+  response?: AxiosErrorResponse;
+  message?: string;
 }
 
 export default defineComponent({
@@ -327,6 +333,7 @@ export default defineComponent({
         status: undefined,
         receipt_url: null,
         receipt_number: null,
+        payment_id: null,
       }),
     },
     selectedTermPeriod: {
@@ -403,7 +410,7 @@ export default defineComponent({
     const showPaymentInstructions = ref(false);
     const selectedPaymentType = ref<string | null>(null);
     const currentStep = ref<'form' | 'completed'>('form');
-    const paymentId = ref<number | null>(null);
+    const paymentId = ref<string | number | null>(null);
     const receiptUrl = ref<string | null>(null);
     const receiptNumber = ref<string | null>(null);
     const isSubmitting = ref(false);
@@ -450,6 +457,7 @@ export default defineComponent({
       status: props.payment.status || undefined,
       receipt_url: props.payment.receipt_url || null,
       receipt_number: props.payment.receipt_number || null,
+      payment_id: props.payment.payment_id || null,
     });
 
     const isMobile = computed(() => window.innerWidth <= 768);
@@ -465,7 +473,7 @@ export default defineComponent({
         receiptUrl: receiptUrl.value,
         receiptNumber: receiptNumber.value,
         paymentSubmitted: !!localPayment.value.transaction_id,
-        paymentCompleted: localPayment.value.status === 'completed' || localPayment.value.status === 'received',
+        paymentCompleted: localPayment.value.status === 'completed' || localPayment.value.status === 'received' || localPayment.value.status === 'approved',
         paymentId: paymentId.value,
       };
       console.log('[DEBUG] PaymentForm getFormState:', {
@@ -509,46 +517,62 @@ export default defineComponent({
         status: props.payment.status,
         receiptUrl: props.payment.receipt_url,
         currentStep: currentStep.value,
+        paymentMethodId: localPayment.value.payment_method_id,
+        paymentTypeId: localPayment.value.payment_type_id,
         timestamp: new Date().toISOString(),
       });
       try {
         await fetchPaymentMethods();
-        if (localPayment.value.payment_method_id) {
+        if (props.payment.payment_method_id || localPayment.value.payment_method_id) {
+          localPayment.value.payment_method_id = props.payment.payment_method_id || localPayment.value.payment_method_id;
           await fetchPaymentTypes();
-          if (localPayment.value.payment_type_id) {
+          if (props.payment.payment_type_id || localPayment.value.payment_type_id) {
+            localPayment.value.payment_type_id = props.payment.payment_type_id || localPayment.value.payment_type_id;
             onPaymentTypeChange();
           }
         }
-        if (props.payment.status === 'completed' || props.payment.status === 'received') {
+        if (props.payment.status === 'completed' || props.payment.status === 'received' || props.payment.status === 'approved') {
           console.log('[DEBUG] Setting initial step to completed', {
             status: props.payment.status,
             receiptUrl: props.payment.receipt_url,
             timestamp: new Date().toISOString(),
           });
-          paymentId.value = props.payment.payment_id || paymentId.value;
+          paymentId.value = props.payment.payment_id || paymentId.value || `temp_${uuidv4()}`;
           currentStep.value = 'completed';
           receiptUrl.value = props.payment.receipt_url ?? null;
           receiptNumber.value = props.payment.receipt_number || `RCP-${Date.now()}`;
           localPayment.value.status = props.payment.status;
           localPayment.value.receipt_url = receiptUrl.value;
-          await nextTick();
-          if (!receiptUrl.value) {
-            console.log('[DEBUG] No receipt URL, generating receipt', {
+          localPayment.value.receipt_number = receiptNumber.value;
+          // Ensure selectedPaymentType is set for completed payments
+          if (localPayment.value.payment_type_id && !selectedPaymentType.value) {
+            await fetchPaymentTypes();
+            const selectedType = paymentTypes.value.find(
+              (type) => type.id === localPayment.value.payment_type_id
+            );
+            selectedPaymentType.value = selectedType?.name || 'Unknown';
+            console.log('[DEBUG] Set selectedPaymentType in onMounted:', {
+              selectedPaymentType: selectedPaymentType.value,
               timestamp: new Date().toISOString(),
             });
-            await generateReceipt();
-            await downloadReceipt();
-          } else {
-            await downloadReceipt();
           }
+          await nextTick();
+          console.log('[DEBUG] Generating receipt in onMounted', {
+            receiptUrl: receiptUrl.value,
+            selectedPaymentType: selectedPaymentType.value,
+            timestamp: new Date().toISOString(),
+          });
+          await generateReceipt();
+          await downloadReceipt();
           emitPaymentUpdate();
         } else if (props.payment.status === 'pending') {
-          paymentId.value = props.payment.payment_id || paymentId.value;
+          paymentId.value = props.payment.payment_id || paymentId.value || `temp_${uuidv4()}`;
           pollPaymentStatus();
         }
-      } catch (error) {
+      } catch (error: unknown) {
+        const axiosError = error as AxiosError;
         console.error('[DEBUG] Error in onMounted:', {
-          error: error instanceof Error ? error.message : String(error),
+          error: axiosError.message ?? String(error),
           timestamp: new Date().toISOString(),
         });
         showSwal('Error', 'Failed to initialize payment form.', 'error');
@@ -558,6 +582,7 @@ export default defineComponent({
         localPayment: localPayment.value,
         paymentMethods: paymentMethods.value,
         paymentTypes: paymentTypes.value,
+        selectedPaymentType: selectedPaymentType.value,
         timestamp: new Date().toISOString(),
       });
     });
@@ -565,6 +590,11 @@ export default defineComponent({
     onUnmounted(() => {
       if (pollingInterval.value) {
         clearInterval(pollingInterval.value);
+      }
+      if (receiptUrl.value) {
+        URL.revokeObjectURL(receiptUrl.value);
+        receiptUrl.value = null;
+        localPayment.value.receipt_url = null;
       }
     });
 
@@ -635,14 +665,15 @@ export default defineComponent({
           methods: paymentMethods.value,
           timestamp: new Date().toISOString(),
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const axiosError = error as AxiosError;
         paymentMethods.value = [
           { id: 1, method_name: 'Bank Transfer', method_type: 'bank' },
           { id: 2, method_name: 'Mobile Payment', method_type: 'mobile' },
         ];
         showSwal('Error', 'Failed to fetch payment methods. Using default options.', 'error');
         console.error('[DEBUG] Error fetching payment methods:', {
-          error: error.message,
+          error: axiosError.message ?? String(error),
           timestamp: new Date().toISOString(),
         });
       } finally {
@@ -685,7 +716,8 @@ export default defineComponent({
           paymentMethodId: localPayment.value.payment_method_id,
           timestamp: new Date().toISOString(),
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const axiosError = error as AxiosError;
         const selectedMethod = paymentMethods.value.find(method => method.id === localPayment.value.payment_method_id);
         const methodType = selectedMethod?.method_type;
         paymentTypes.value = methodType === 'bank'
@@ -695,7 +727,7 @@ export default defineComponent({
           : [];
         showSwal('Error', 'Failed to fetch payment types. Using default options.', 'error');
         console.error('[DEBUG] Error fetching payment types:', {
-          error: error.message,
+          error: axiosError.message ?? String(error),
           timestamp: new Date().toISOString(),
         });
       } finally {
@@ -810,137 +842,112 @@ export default defineComponent({
     };
 
     const handleSubmit = async () => {
-  if (isSubmitting.value) {
-    console.log('[DEBUG] handleSubmit skipped: Already submitting', {
-      timestamp: new Date().toISOString(),
-    });
-    return false;
-  }
-  isSubmitting.value = true;
-  loading.value = true;
-  loadingText.value = 'Submitting payment...';
-  try {
-    const paymentDetails = { ...localPayment.value.payment_details };
-    const paymentData = {
-      user_id: props.userId,
-      booking_id: props.bookingId,
-      property_id: props.propertyId,
-      lease_id: props.leaseId,
-      billing_address_id: props.billingAddressId,
-      amount: getTotalAmount(),
-      currency: localPayment.value.currency,
-      payment_method_id: localPayment.value.payment_method_id,
-      payment_type_id: localPayment.value.payment_type_id,
-      payment_details: paymentDetails,
-      transaction_id: `txn_${uuidv4()}_${Date.now()}`,
-      status: 'pending',
-      date: localPayment.value.date || new Date().toISOString().split('T')[0],
-      room_number: props.isRoomBased ? localPayment.value.room_number : undefined,
-    };
-    console.log('[DEBUG] Submitting payment with data:', {
-      paymentData,
-      timestamp: new Date().toISOString(),
-    });
-    const response = await makeRequest({
-      method: 'POST',
-      url: `${props.apiBaseUrl}/v1/payments`,
-      data: paymentData,
-      headers: {
-        Authorization: `Bearer ${props.authStore.token}`,
-        'Content-Type': 'application/json',
-      },
-      requiresAuth: true,
-    });
-    const paymentResponse = response.data.data || response.data;
-    console.log('[DEBUG] Payment submission response:', {
-      paymentResponse,
-      status: paymentResponse.status,
-      responseRaw: JSON.stringify(response.data),
-      timestamp: new Date().toISOString(),
-    });
-    // Check for payment ID
-    paymentId.value = paymentResponse.id || paymentResponse.payment_id;
-    if (!paymentId.value) {
-      console.error('[DEBUG] No payment ID in response, generating temporary ID', {
-        timestamp: new Date().toISOString(),
-      });
-      paymentId.value = `temp_${uuidv4()}`; // Temporary ID as fallback
-      showSwal('Warning', 'No payment ID returned from server. Using temporary ID and retrying.', 'warning');
-      // Optionally retry the request
-      setTimeout(async () => {
-        try {
-          const retryResponse = await makeRequest({
-            method: 'POST',
-            url: `${props.apiBaseUrl}/v1/payments`,
-            data: paymentData,
-            headers: {
-              Authorization: `Bearer ${props.authStore.token}`,
-              'Content-Type': 'application/json',
-            },
-            requiresAuth: true,
-          });
-          const retryPaymentResponse = retryResponse.data.data || retryResponse.data;
-          paymentId.value = retryPaymentResponse.id || retryPaymentResponse.payment_id || paymentId.value;
-          console.log('[DEBUG] Retry payment submission response:', {
-            retryPaymentResponse,
-            paymentId: paymentId.value,
-            timestamp: new Date().toISOString(),
-          });
-        } catch (retryError: any) {
-          console.error('[DEBUG] Retry failed in handleSubmit:', {
-            error: retryError.message,
-            timestamp: new Date().toISOString(),
-          });
+      if (isSubmitting.value) {
+        console.log('[DEBUG] handleSubmit skipped: Already submitting', {
+          timestamp: new Date().toISOString(),
+        });
+        return false;
+      }
+      isSubmitting.value = true;
+      loading.value = true;
+      loadingText.value = 'Submitting payment...';
+      try {
+        const paymentDetails = { ...localPayment.value.payment_details };
+        const paymentData = {
+          user_id: props.userId,
+          booking_id: props.bookingId,
+          property_id: props.propertyId,
+          lease_id: props.leaseId,
+          billing_address_id: props.billingAddressId,
+          amount: getTotalAmount(),
+          currency: localPayment.value.currency,
+          payment_method_id: localPayment.value.payment_method_id,
+          payment_type_id: localPayment.value.payment_type_id,
+          payment_details: paymentDetails,
+          transaction_id: `txn_${uuidv4()}_${Date.now()}`,
+          status: 'pending',
+          date: localPayment.value.date || new Date().toISOString().split('T')[0],
+          room_number: props.isRoomBased ? localPayment.value.room_number : undefined,
+        };
+        console.log('[DEBUG] Submitting payment with data:', {
+          paymentData,
+          timestamp: new Date().toISOString(),
+        });
+        const response = await makeRequest({
+          method: 'POST',
+          url: `${props.apiBaseUrl}/v1/payments`,
+          data: paymentData,
+          headers: {
+            Authorization: `Bearer ${props.authStore.token}`,
+            'Content-Type': 'application/json',
+          },
+          requiresAuth: true,
+        });
+        const paymentResponse = response.data.data || response.data;
+        console.log('[DEBUG] Payment submission response:', {
+          paymentResponse,
+          status: paymentResponse.status,
+          responseRaw: JSON.stringify(response.data),
+          timestamp: new Date().toISOString(),
+        });
+        paymentId.value = paymentResponse.id || paymentResponse.payment_id || `temp_${uuidv4()}`;
+        localPayment.value.transaction_id = paymentResponse.transaction_id || paymentData.transaction_id;
+        localPayment.value.status = paymentResponse.status || 'pending';
+        localPayment.value.receipt_url = paymentResponse.receipt_url || null;
+        localPayment.value.receipt_number = paymentResponse.receipt_number || null;
+        localPayment.value.payment_method_id = paymentResponse.payment_method_id || localPayment.value.payment_method_id;
+        localPayment.value.payment_type_id = paymentResponse.payment_type_id || localPayment.value.payment_type_id;
+        if (localPayment.value.payment_type_id) {
+          const selectedType = paymentTypes.value.find(
+            (type) => type.id === localPayment.value.payment_type_id
+          );
+          selectedPaymentType.value = selectedType?.name || selectedPaymentType.value || 'Unknown';
         }
-      }, 2000);
-    }
-    localPayment.value.transaction_id = paymentResponse.transaction_id || paymentData.transaction_id;
-    localPayment.value.status = paymentResponse.status || 'pending';
-    localPayment.value.receipt_url = paymentResponse.receipt_url || null;
-    localPayment.value.receipt_number = paymentResponse.receipt_number || null;
-    emit('payment-submitted', {
-      paymentId: paymentId.value,
-      transactionId: localPayment.value.transaction_id,
-      status: localPayment.value.status,
-      receiptUrl: localPayment.value.receipt_url,
-      receiptNumber: localPayment.value.receipt_number,
-    });
-    emitPaymentUpdate();
-    showSwal('Success', 'Payment submitted. Awaiting admin approval.', 'success');
-    pollPaymentStatus();
-    return true;
-  } catch (error: any) {
-    console.error('[DEBUG] Error in handleSubmit:', {
-      error: error.message,
-      response: error.response?.data,
-      status: error.response?.status,
-      timestamp: new Date().toISOString(),
-    });
-    const serverErrors = error.response?.data?.errors;
-    if (serverErrors) {
-      Object.keys(serverErrors).forEach((key) => {
-        errors.value[key] = Array.isArray(serverErrors[key])
-          ? serverErrors[key].join(', ')
-          : serverErrors[key];
-      });
-      errorMessage.value = 'Please correct the following errors:';
-      showSwal('Error', errorMessage.value, 'error');
-    } else {
-      errorMessage.value = error.response?.data?.message || 'Payment processing failed. Please try again.';
-      showSwal('Error', errorMessage.value, 'error');
-    }
-    emit('payment-failed', {
-      error,
-      paymentId: paymentId.value,
-      transactionId: localPayment.value.transaction_id,
-    });
-    return false;
-  } finally {
-    loading.value = false;
-    loadingText.value = '';
-    isSubmitting.value = false;
-  }
-};
+        emit('payment-submitted', {
+          paymentId: paymentId.value,
+          transactionId: localPayment.value.transaction_id,
+          status: localPayment.value.status,
+          receiptUrl: localPayment.value.receipt_url,
+          receiptNumber: localPayment.value.receipt_number,
+        });
+        emitPaymentUpdate();
+        showSwal('Success', 'Payment submitted. Awaiting admin approval.', 'success');
+        pollPaymentStatus();
+        return true;
+      } catch (error: unknown) {
+        const axiosError = error as AxiosError;
+        console.error('[DEBUG] Error in handleSubmit:', {
+          error: axiosError.message ?? String(error),
+          response: axiosError.response?.data,
+          status: axiosError.response?.status,
+          timestamp: new Date().toISOString(),
+        });
+        const serverErrors = axiosError.response?.data?.errors;
+        if (serverErrors) {
+          Object.keys(serverErrors).forEach((key) => {
+            errors.value[key] = Array.isArray(serverErrors[key])
+              ? serverErrors[key].join(', ')
+              : serverErrors[key];
+          });
+          errorMessage.value = 'Please correct the following errors:';
+          showSwal('Error', errorMessage.value, 'error');
+        } else {
+          errorMessage.value = axiosError.response?.data?.message || 'Payment processing failed. Please try again.';
+          showSwal('Error', errorMessage.value, 'error');
+        }
+        paymentId.value = paymentId.value || `temp_${uuidv4()}`;
+        emit('payment-failed', {
+          error,
+          paymentId: paymentId.value,
+          transactionId: localPayment.value.transaction_id,
+        });
+        return false;
+      } finally {
+        loading.value = false;
+        loadingText.value = '';
+        isSubmitting.value = false;
+      }
+    };
 
     const pollPaymentStatus = () => {
       if (!paymentId.value) {
@@ -959,8 +966,7 @@ export default defineComponent({
       pollingInterval.value = setInterval(async () => {
         if (pollCount >= maxPolls) {
           clearInterval(pollingInterval.value!);
-          showSwal('Timeout', 'Payment approval timeout. Please check later.', 'warning');
-          emit('payment-timeout', { paymentId: paymentId.value });
+          handlePaymentTimeout();
           return;
         }
         pollCount++;
@@ -971,27 +977,30 @@ export default defineComponent({
             headers: { Authorization: `Bearer ${props.authStore.token}` },
             requiresAuth: true,
           });
-          const status = response.data.data?.status || response.data.status;
+          const paymentData = response.data.data || response.data;
           console.log('[DEBUG] Polling status:', {
-            status,
+            status: paymentData.status,
+            paymentMethodId: paymentData.payment_method_id,
+            paymentTypeId: paymentData.payment_type_id,
             pollCount,
             paymentId: paymentId.value,
             transactionId: localPayment.value.transaction_id,
             timestamp: new Date().toISOString(),
           });
-          if (status === 'received' || status === 'completed') {
+          if (paymentData.status === 'received' || paymentData.status === 'completed' || paymentData.status === 'approved') {
             clearInterval(pollingInterval.value!);
-            await handleStatusTransition(status, response.data.data || response.data);
-          } else if (status === 'failed' || status === 'cancelled') {
+            await handleStatusTransition(paymentData.status, paymentData);
+          } else if (paymentData.status === 'failed' || paymentData.status === 'cancelled') {
             clearInterval(pollingInterval.value!);
-            await handleStatusTransition(status, response.data.data || response.data);
+            await handleStatusTransition(paymentData.status, paymentData);
           }
-        } catch (error) {
+        } catch (error: unknown) {
+          const axiosError = error as AxiosError;
           console.error('[DEBUG] Polling error:', {
-            error: error instanceof Error ? error.message : String(error),
+            error: axiosError.message ?? String(error),
             timestamp: new Date().toISOString(),
           });
-          if (error.response?.status === 404) {
+          if (axiosError.response?.status === 404) {
             clearInterval(pollingInterval.value!);
             showSwal('Error', 'Payment not found. Please resubmit the payment.', 'error');
             emit('payment-failed', { error, paymentId: paymentId.value });
@@ -1011,25 +1020,37 @@ export default defineComponent({
         timestamp: new Date().toISOString(),
       });
       localPayment.value.status = newStatus;
-      paymentId.value = paymentData.id || paymentId.value;
+      paymentId.value = paymentData.id || paymentId.value || `temp_${uuidv4()}`;
       receiptUrl.value = paymentData.receipt_url || receiptUrl.value;
       receiptNumber.value = paymentData.receipt_number || receiptNumber.value || `RCP-${Date.now()}`;
       localPayment.value.receipt_url = receiptUrl.value;
       localPayment.value.receipt_number = receiptNumber.value;
-      if (newStatus === 'received' || newStatus === 'completed') {
+      localPayment.value.payment_method_id = paymentData.payment_method_id || localPayment.value.payment_method_id;
+      localPayment.value.payment_type_id = paymentData.payment_type_id || localPayment.value.payment_type_id;
+      if (newStatus === 'received' || newStatus === 'completed' || newStatus === 'approved') {
         console.log('[DEBUG] Setting currentStep to completed', {
           timestamp: new Date().toISOString(),
         });
         currentStep.value = 'completed';
+        if (localPayment.value.payment_type_id && !selectedPaymentType.value) {
+          await fetchPaymentTypes();
+          const selectedType = paymentTypes.value.find(
+            (type) => type.id === localPayment.value.payment_type_id
+          );
+          selectedPaymentType.value = selectedType?.name || 'Unknown';
+          console.log('[DEBUG] Updated selectedPaymentType in completed step:', {
+            selectedPaymentType: selectedPaymentType.value,
+            paymentTypeId: localPayment.value.payment_type_id,
+            timestamp: new Date().toISOString(),
+          });
+        }
         if (!receiptUrl.value) {
           console.log('[DEBUG] No receipt URL, generating receipt', {
             timestamp: new Date().toISOString(),
           });
           await generateReceipt();
-          await downloadReceipt();
-        } else {
-          await downloadReceipt();
         }
+        await downloadReceipt();
         await nextTick();
         emit('payment-completed', {
           paymentId: paymentId.value,
@@ -1061,15 +1082,13 @@ export default defineComponent({
       console.log('[DEBUG] generateReceipt called', {
         paymentId: paymentId.value,
         transactionId: localPayment.value.transaction_id,
+        selectedPaymentType: selectedPaymentType.value,
+        paymentTypeId: localPayment.value.payment_type_id,
+        paymentMethodId: localPayment.value.payment_method_id,
         timestamp: new Date().toISOString(),
       });
-      if (!paymentId.value) {
-        console.error('[DEBUG] generateReceipt: No payment ID, aborting', {
-          timestamp: new Date().toISOString(),
-        });
-        showSwal('Error', 'Cannot generate receipt without a payment ID.', 'error');
-        return null;
-      }
+
+      const effectivePaymentId = paymentId.value || `temp_${uuidv4()}`;
       loading.value = true;
       loadingText.value = 'Generating receipt...';
       try {
@@ -1080,147 +1099,203 @@ export default defineComponent({
         });
         const receiptNum = receiptNumber.value || `RCP-${Date.now()}`;
         const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
+        const pageHeight = doc.internal.pageSize.getHeight(); // Define pageHeight
         const margin = 15;
         let yPosition = 20;
+
+        // Watermark
         doc.setGState(doc.GState({ opacity: 0.1 }));
         const watermarkWidth = 100;
         const watermarkHeight = 100;
-        try {
-          await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.src = logoImage;
-            img.onload = () => {
-              doc.addImage(
-                img,
-                'PNG',
-                (pageWidth - watermarkWidth) / 2,
-                (pageHeight - watermarkHeight) / 2,
-                watermarkWidth,
-                watermarkHeight,
-              );
-              resolve();
-            };
-            img.onerror = () => reject(new Error('Failed to load watermark image'));
-          });
-        } catch (error) {
-          console.error('[DEBUG] Error in generateReceipt:', {
-            error: error instanceof Error ? error.message : String(error),
-            timestamp: new Date().toISOString(),
-          });
+        const loadWatermark = new Promise((resolve) => {
+          const img = new Image();
+          img.src = logoImage;
+          img.onload = () => {
+            doc.addImage(
+              img,
+              'PNG',
+              (pageWidth - watermarkWidth) / 2,
+              (pageHeight - watermarkHeight) / 2,
+              watermarkWidth,
+              watermarkHeight,
+            );
+            console.log('[DEBUG] Watermark image added successfully', {
+              timestamp: new Date().toISOString(),
+            });
+            resolve(true);
+          };
+          img.onerror = () => {
+            console.warn('[DEBUG] Failed to load watermark image, using text fallback', {
+              timestamp: new Date().toISOString(),
+            });
+            resolve(false);
+          };
+        });
+        const timeoutWatermark = new Promise((resolve) => setTimeout(() => resolve(false), 5000));
+        const watermarkSuccess = await Promise.race([loadWatermark, timeoutWatermark]);
+        if (!watermarkSuccess) {
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(50);
           doc.setTextColor(200, 200, 200);
           doc.text('EAGER SKY', pageWidth / 2, pageHeight / 2, { align: 'center' });
         }
         doc.setGState(doc.GState({ opacity: 1 }));
+
+        // Header Logo
         const logoWidth = 30;
         const logoHeight = 30;
-        try {
-          await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.src = logoImage;
-            img.onload = () => {
-              doc.addImage(img, 'PNG', margin, yPosition, logoWidth, logoHeight);
-              resolve();
-            };
-            img.onerror = () => reject(new Error('Failed to load logo image'));
-          });
-        } catch (error) {
-          console.error('[DEBUG] Error in generateReceipt:', {
-            error: error instanceof Error ? error.message : String(error),
-            timestamp: new Date().toISOString(),
-          });
+        const loadHeaderLogo = new Promise((resolve) => {
+          const img = new Image();
+          img.src = logoImage;
+          img.onload = () => {
+            doc.addImage(img, 'PNG', (pageWidth - logoWidth) / 2, yPosition, logoWidth, logoHeight);
+            console.log('[DEBUG] Header logo image added successfully', {
+              timestamp: new Date().toISOString(),
+            });
+            resolve(true);
+          };
+          img.onerror = () => {
+            console.warn('[DEBUG] Failed to load header logo image, using text fallback', {
+              timestamp: new Date().toISOString(),
+            });
+            resolve(false);
+          };
+        });
+        const timeoutHeaderLogo = new Promise((resolve) => setTimeout(() => resolve(false), 5000));
+        const headerLogoSuccess = await Promise.race([loadHeaderLogo, timeoutHeaderLogo]);
+        if (!headerLogoSuccess) {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(20);
-          doc.text('EAGER SKY', margin, yPosition + 10);
+          doc.text('EAGER SKY', (pageWidth - doc.getTextWidth('EAGER SKY')) / 2, yPosition + 10);
         }
+
+        yPosition += 35;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(18);
-        doc.text('EAGER SKY REAL ESTATE', pageWidth / 2, yPosition + 10, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.text('EAGER SKY REAL ESTATE', pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 10;
         doc.setFontSize(14);
         doc.setTextColor(100, 100, 100);
-        doc.text('PAYMENT RECEIPT', pageWidth / 2, yPosition + 20, { align: 'center' });
-        yPosition += 35;
+        doc.text('PAYMENT RECEIPT', pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 15;
+
         doc.setLineDash([2, 2], 0);
         doc.line(margin, yPosition, pageWidth - margin, yPosition);
         yPosition += 10;
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
         doc.text(`Receipt No: ${receiptNum}`, margin, yPosition);
         doc.text(`Date: ${new Date(localPayment.value?.date || Date.now()).toLocaleDateString()}`, pageWidth - margin, yPosition, { align: 'right' });
         yPosition += 10;
+
         doc.text(`Transaction ID: ${localPayment.value.transaction_id || 'N/A'}`, margin, yPosition);
         yPosition += 10;
-        doc.text(`Payment ID: ${paymentId.value || 'N/A'}`, margin, yPosition);
+
+        doc.text(`Payment ID: ${effectivePaymentId}`, margin, yPosition);
         yPosition += 15;
+
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
         doc.text('Payment Details', margin, yPosition);
         yPosition += 5;
         doc.line(margin, yPosition, pageWidth - margin, yPosition);
         yPosition += 5;
+
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
         doc.text(`Total Amount: TZS ${getTotalAmount().toLocaleString()}`, margin, yPosition);
         yPosition += 7;
-        doc.text(`Payment Method: ${selectedPaymentType.value || 'N/A'}`, margin, yPosition);
+
+        let paymentMethodDisplay = selectedPaymentType.value;
+        if (!paymentMethodDisplay && localPayment.value.payment_type_id) {
+          await fetchPaymentTypes();
+          const selectedType = paymentTypes.value.find(
+            (type) => type.id === localPayment.value.payment_type_id
+          );
+          paymentMethodDisplay = selectedType?.name || 'Unknown';
+          selectedPaymentType.value = paymentMethodDisplay;
+        } else if (!paymentMethodDisplay) {
+          paymentMethodDisplay = localPayment.value.payment_details?.type === 'bank_transfer'
+            ? 'Bank Transfer (NMB Bank)'
+            : localPayment.value.payment_details?.type === 'mobile'
+            ? 'Mobile Payment (Vodacom M-Pesa)'
+            : 'Unknown';
+          selectedPaymentType.value = paymentMethodDisplay;
+        }
+        doc.text(`Payment Method: ${paymentMethodDisplay}`, margin, yPosition);
         yPosition += 7;
+
         doc.text(
           `Rent Period: ${props.selectedTermPeriod?.period_of_payment ? props.selectedTermPeriod.period_of_payment.charAt(0).toUpperCase() + props.selectedTermPeriod.period_of_payment.slice(1) : 'Not specified'}`,
           margin,
-          yPosition,
+          yPosition
         );
         yPosition += 15;
+
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
         doc.text('Property Information', margin, yPosition);
         yPosition += 5;
         doc.line(margin, yPosition, pageWidth - margin, yPosition);
         yPosition += 5;
+
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
         doc.text(`Property: ${displayTitle.value}`, margin, yPosition);
         yPosition += 7;
+
         if (localPayment.value?.room_number && props.isRoomBased) {
           doc.text(`Room Number: ${localPayment.value.room_number}`, margin, yPosition);
           yPosition += 7;
         }
+
         doc.text(`Location: ${displayLocation.value}`, margin, yPosition);
         yPosition += 7;
+
         doc.text(`Type: ${displayType.value}`, margin, yPosition);
         yPosition += 15;
+
         doc.line(margin, yPosition, pageWidth - margin, yPosition);
         yPosition += 10;
+
         doc.setFont('helvetica', 'italic');
         doc.setFontSize(8);
         doc.setTextColor(100, 100, 100);
         doc.text('Thank you for your payment!', pageWidth / 2, yPosition, { align: 'center' });
         yPosition += 5;
+
         doc.text('Eager Sky Real Estate - Contact: support@eagersky.co.tz', pageWidth / 2, yPosition, { align: 'center' });
         doc.setLineDash();
+
         const pdfBlob = doc.output('blob');
         receiptUrl.value = URL.createObjectURL(pdfBlob);
         receiptNumber.value = receiptNum;
         localPayment.value.receipt_url = receiptUrl.value;
+        localPayment.value.receipt_number = receiptNum;
+
         console.log('[DEBUG] Receipt generated successfully:', {
           receiptNumber: receiptNumber.value,
           receiptUrl: receiptUrl.value,
-          paymentId: paymentId.value,
+          paymentId: effectivePaymentId,
           transactionId: localPayment.value.transaction_id,
+          paymentMethod: paymentMethodDisplay,
           timestamp: new Date().toISOString(),
         });
+
         return doc;
-      } catch (error) {
+      } catch (error: unknown) {
+        const axiosError = error as AxiosError;
         console.error('[DEBUG] Error in generateReceipt:', {
-          error: error instanceof Error ? error.message : String(error),
-          paymentId: paymentId.value,
+          error: axiosError.message ?? String(error),
+          paymentId: effectivePaymentId,
           transactionId: localPayment.value.transaction_id,
           timestamp: new Date().toISOString(),
         });
-        receiptUrl.value = 'https://example.com/fallback-receipt.pdf';
-        localPayment.value.receipt_url = receiptUrl.value;
-        showSwal('Error', 'Failed to generate receipt. Using fallback URL.', 'warning');
+        receiptUrl.value = null;
+        localPayment.value.receipt_url = null;
+        showSwal('Error', 'Failed to generate receipt. Please try again.', 'error');
         return null;
       } finally {
         loading.value = false;
@@ -1240,22 +1315,38 @@ export default defineComponent({
       try {
         if (!receiptUrl.value) {
           console.log('[DEBUG] No receipt URL, generating receipt', {
+            selectedPaymentType: selectedPaymentType.value,
+            paymentTypeId: localPayment.value.payment_type_id,
             timestamp: new Date().toISOString(),
           });
+          if (localPayment.value.payment_type_id && !selectedPaymentType.value) {
+            await fetchPaymentTypes();
+            const selectedType = paymentTypes.value.find(
+              (type) => type.id === localPayment.value.payment_type_id
+            );
+            selectedPaymentType.value = selectedType?.name || 'Unknown';
+            console.log('[DEBUG] Re-validated selectedPaymentType for download:', {
+              selectedPaymentType: selectedPaymentType.value,
+              timestamp: new Date().toISOString(),
+            });
+          }
           await generateReceipt();
           await nextTick();
         }
+        if (!receiptUrl.value) {
+          throw new Error('Receipt URL not generated');
+        }
         const link = document.createElement('a');
-        link.href = receiptUrl.value!;
+        link.href = receiptUrl.value;
         link.download = `Receipt_${receiptNumber.value || 'payment'}.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(receptUrl.value!), 1000);
         console.log('[DEBUG] Receipt downloaded:', {
           receiptNumber: receiptNumber.value,
           paymentId: paymentId.value,
           transactionId: localPayment.value.transaction_id,
+          paymentMethod: selectedPaymentType.value,
           timestamp: new Date().toISOString(),
         });
         emit('receipt-printed', {
@@ -1264,13 +1355,28 @@ export default defineComponent({
           receiptNumber: receiptNumber.value,
         });
         showSwal('Success', 'Receipt downloaded successfully.', 'success');
-      } catch (error) {
+      } catch (error: unknown) {
+        const axiosError = error as AxiosError;
         console.error('[DEBUG] Error in downloadReceipt:', {
-          error: error instanceof Error ? error.message : String(error),
+          error: axiosError.message ?? String(error),
           timestamp: new Date().toISOString(),
         });
-        showSwal('Error', 'Failed to download receipt. Please try manually.', 'error');
+        showSwal('Error', 'Failed to download receipt. Please try again.', 'error');
       }
+    };
+
+    const handlePaymentTimeout = async () => {
+      console.log('[DEBUG] handlePaymentTimeout called', {
+        paymentId: paymentId.value,
+        transactionId: localPayment.value.transaction_id,
+        timestamp: new Date().toISOString(),
+      });
+      showSwal('Timeout', 'Payment approval timeout. Please check later or contact support.', 'warning');
+      emit('payment-timeout', { paymentId: paymentId.value });
+      currentStep.value = 'form';
+      paymentId.value = null;
+      localPayment.value.transaction_id = null;
+      emitPaymentUpdate();
     };
 
     const cancelPayment = async () => {
@@ -1312,9 +1418,9 @@ export default defineComponent({
         currentStep.value = 'form';
         paymentId.value = null;
         localPayment.value.transaction_id = null;
-        localPayment.value.status = undefined;
-        localPayment.value.receipt_url = null;
-        localPayment.value.receipt_number = null;
+        localPayment.value.payment_method_id = null;
+        localPayment.value.payment_type_id = null;
+        selectedPaymentType.value = null;
         console.log('[DEBUG] Payment cancelled, resetting to form step', {
           timestamp: new Date().toISOString(),
         });
@@ -1324,10 +1430,11 @@ export default defineComponent({
         });
         emitPaymentUpdate();
         showSwal('Payment Cancelled', 'Your payment has been cancelled.', 'success');
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const axiosError = error as AxiosError;
         console.error('[DEBUG] Error in cancelPayment:', {
-          error: error.message,
-          response: error.response?.data,
+          error: axiosError.message ?? String(error),
+          response: axiosError.response?.data,
           timestamp: new Date().toISOString(),
         });
         showSwal('Error', 'Failed to cancel payment.', 'error');
@@ -1375,14 +1482,6 @@ export default defineComponent({
       });
     };
 
-    const viewAgreement = () => {
-      console.log('[DEBUG] viewAgreement called', {
-        leaseId: props.leaseId,
-        timestamp: new Date().toISOString(),
-      });
-      emit('view-agreement', { leaseId: props.leaseId });
-    };
-
     const showSwal = (title: string, text: string, icon: 'success' | 'error' | 'warning' | 'info') => {
       console.log('[DEBUG] Showing Swal:', {
         title,
@@ -1406,6 +1505,7 @@ export default defineComponent({
       submitFromParent,
       getFormState,
       getPaymentId,
+      handlePaymentTimeout, // Expose handlePaymentTimeout to fix Vue warn
     });
 
     return {
@@ -1438,13 +1538,14 @@ export default defineComponent({
       downloadReceipt,
       cancelPayment,
       emitPaymentUpdate,
-      viewAgreement,
       getFormState,
       getPaymentId,
       submitFromParent,
+      handlePaymentTimeout,
     };
   },
 });
+
 </script>
 
 <style scoped>
@@ -1768,16 +1869,17 @@ select.error,
   text-align: center;
 }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .summary-item {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 12px;
+  align-items: center;
+  padding: 8px 0;
 }
 
 .summary-label {
@@ -1844,8 +1946,8 @@ select.error,
     padding: 12px 20px;
     font-size: 15px;
   }
-  .summary-grid {
-    grid-template-columns: 1fr;
+  .summary-list {
+    gap: 10px;
   }
   .action-buttons {
     flex-direction: column;
@@ -1864,6 +1966,11 @@ select.error,
   }
   .status-card {
     padding: 20px 15px;
+  }
+  .summary-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
 }
 

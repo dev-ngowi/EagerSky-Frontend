@@ -4,7 +4,7 @@
       <!-- Section Title -->
       <div class="section-title text-center">
         <div class="title-wrapper">
-          <span class="subtitle-badge">🏠 PROPERTY</span>
+          <span class="subtitle-badge mt-5">🏠 PROPERTY</span>
           <h2 class="main-title">Property Details</h2>
           <div class="title-underline"></div>
           <p class="section-description">Discover the details of this exceptional property.</p>
@@ -116,27 +116,22 @@
             <!-- Additional Details -->
             <div class="additional-details">
               <p><strong>Category:</strong> {{ property.category }}</p>
-              <p><strong>Energy Rating:</strong> {{ property.energy_rating }}</p>
               <p><strong>Total Rooms:</strong> {{ property.total_rooms || property.rooms.length }}</p>
               <p><strong>Available Rooms:</strong> {{ getAvailableRoomsCount() }}</p>
               <p><strong>Booked Rooms:</strong> {{ getBookedRoomsCount() }}</p>
               <p v-if="property.map_url">
-                <a :href="property.map_url" target="_blank" class="map-link" aria-label="View property location on map">
-                  <i class="bi bi-geo-alt-fill" aria-hidden="true"></i> View on Map
-                </a>
+                <div class="action-buttons">
+                  <button 
+                    class="cta-button text-light"
+                    aria-label="Book this property"
+                  >
+                    <a :href="property.map_url" target="_blank" class="map-link text-light" aria-label="View property location on map">
+                      <i class="bi bi-geo-alt-fill" aria-hidden="true"></i> View on Map
+                    </a>
+                  </button>
+                </div>
               </p>
             </div>
-            <!-- Action Buttons -->
-            <!-- <div class="action-buttons">
-              <button 
-                class="cta-button" 
-                @click="bookProperty"
-                aria-label="Book this property"
-              >
-                <i class="bi bi-bookmark-check" aria-hidden="true"></i>
-                Book Now
-              </button>
-            </div> -->
           </div>
         </div>
       </div>
@@ -165,7 +160,7 @@
         <!-- Rooms Grid -->
         <div class="rooms-grid">
           <div 
-            v-for="room in property.rooms" 
+            v-for="room in sortedRooms" 
             :key="room.room_number"
             class="room-card"
             :class="{ 'unavailable': !room.is_available || room.is_booked === '1' }"
@@ -188,7 +183,7 @@
             </div>
             <div class="room-content">
               <div class="room-header">
-                <h3>Room {{ room.room_number }}</h3>
+                <h3 class="room-title" :class="{ 'small-text': room.room_number.length > 10 }">Room {{ room.room_number }}</h3>
                 <div class="room-price">
                   <span>{{ room.rent }}</span>
                   <span>/month</span>
@@ -254,7 +249,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import AOS from 'aos';
 import makeRequest from '../../services/makeRequest';
@@ -309,6 +304,16 @@ const property = ref<Property | null>(null);
 const currentImageIndex = ref(0);
 const failedImages = ref<Set<string>>(new Set());
 const fallbackImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg==';
+
+// Computed property to sort rooms: available first, then unavailable
+const sortedRooms = computed(() => {
+  if (!property.value?.rooms) return [];
+  return [...property.value.rooms].sort((a, b) => {
+    const aIsAvailable = a.is_available && a.is_booked !== '1';
+    const bIsAvailable = b.is_available && b.is_booked !== '1';
+    return aIsAvailable === bIsAvailable ? 0 : aIsAvailable ? -1 : 1;
+  });
+});
 
 // Helper function to normalize and validate property status
 const getPropertyStatusText = (status: string): string => {
@@ -526,19 +531,19 @@ $red-50: #fef2f2;
 $red-500: #ef4444;
 
 .section.property-details {
-  padding: clamp(60px, 10vw, 100px) 0;
+  padding: clamp(20px, 5vw, 60px) 0;
   background: linear-gradient(135deg, $blue-50 0%, $light-color 100%);
 }
 
 .container {
   max-width: 1320px;
   margin: 0 auto;
-  padding: 0 clamp(0.75rem, 2vw, 1rem);
+  padding: 0 clamp(0.5rem, 2vw, 1rem);
   box-sizing: border-box;
 }
 
 .section-title {
-  margin-bottom: clamp(40px, 6vw, 60px);
+  margin-bottom: clamp(20px, 5vw, 40px);
   
   .title-wrapper {
     max-width: 800px;
@@ -552,92 +557,93 @@ $red-500: #ef4444;
       border-radius: 25px;
       font-size: clamp(0.8rem, 2vw, 0.9rem);
       font-weight: 600;
-      margin-bottom: clamp(10px, 2vw, 15px);
+      margin-bottom: clamp(15px, 3vw, 20px);
+      box-shadow: 0 4px 15px rgba(244, 162, 97, 0.3);
     }
     
     .main-title {
-      font-size: clamp(2rem, 5vw, 3rem);
+      font-size: clamp(1.5rem, 5vw, 2.5rem);
       font-weight: 800;
       color: $dark-color;
-      margin-bottom: clamp(10px, 2vw, 15px);
+      margin-bottom: clamp(8px, 2vw, 15px);
     }
     
     .title-underline {
-      width: 100px;
-      height: 4px;
+      width: 80px;
+      height: 3px;
       background: linear-gradient(45deg, $primary-color, #667eea);
-      margin: 0 auto clamp(15px, 3vw, 20px);
+      margin: 0 auto clamp(10px, 3vw, 20px);
       border-radius: 2px;
     }
     
     .section-description {
-      font-size: clamp(0.9rem, 2vw, 1.1rem);
+      font-size: clamp(0.8rem, 2vw, 1rem);
       color: $gray-600;
-      line-height: 1.8;
+      line-height: 1.6;
     }
   }
 }
 
 .loading {
-  margin: clamp(40px, 6vw, 60px) auto;
+  margin: clamp(20px, 5vw, 40px) auto;
   .spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid $primary-color;
+    width: 30px;
+    height: 30px;
+    border: 3px solid $primary-color;
     border-top-color: transparent;
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin: 0 auto clamp(15px, 3vw, 20px);
+    margin: 0 auto clamp(10px, 2vw, 15px);
   }
   p {
     color: $gray-600;
-    font-size: clamp(0.9rem, 2vw, 1rem);
+    font-size: clamp(0.8rem, 2vw, 0.9rem);
   }
 }
 
 .error-message {
-  margin: clamp(40px, 6vw, 60px) auto;
+  margin: clamp(20px, 5vw, 40px) auto;
   .error-content {
     background: $white;
-    padding: clamp(20px, 4vw, 30px);
-    border-radius: 20px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    max-width: 500px;
+    padding: clamp(15px, 3vw, 25px);
+    border-radius: 15px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+    max-width: 400px;
     text-align: center;
     
     i {
-      font-size: clamp(2rem, 5vw, 2.5rem);
+      font-size: clamp(1.5rem, 4vw, 2rem);
       color: $warning-color;
-      margin-bottom: clamp(10px, 2vw, 15px);
+      margin-bottom: clamp(8px, 1.5vw, 12px);
     }
     
     h3 {
-      font-size: clamp(1.5rem, 3.5vw, 1.8rem);
+      font-size: clamp(1.2rem, 3vw, 1.5rem);
       font-weight: 700;
       color: $dark-color;
-      margin-bottom: clamp(10px, 2vw, 15px);
+      margin-bottom: clamp(8px, 1.5vw, 12px);
     }
     
     p {
       color: $gray-600;
-      font-size: clamp(0.9rem, 2vw, 1rem);
-      margin-bottom: clamp(15px, 3vw, 20px);
+      font-size: clamp(0.7rem, 1.5vw, 0.9rem);
+      margin-bottom: clamp(10px, 2vw, 15px);
     }
     
     .cta-button {
       background: linear-gradient(45deg, $primary-color, $blue-700);
       color: $white;
       border: none;
-      padding: clamp(10px, 2vw, 12px) clamp(20px, 4vw, 30px);
-      border-radius: 25px;
-      font-size: clamp(0.9rem, 2vw, 1rem);
+      padding: clamp(6px, 1.5vw, 10px) clamp(15px, 3vw, 25px);
+      border-radius: 20px;
+      font-size: clamp(0.7rem, 1.5vw, 0.9rem);
       font-weight: 600;
       cursor: pointer;
       transition: all 0.3s ease;
       
       &:hover {
         transform: translateY(-2px);
-        box-shadow: 0 5px 10px rgba(0, 123, 255, 0.3);
+        box-shadow: 0 3px 8px rgba(0, 123, 255, 0.3);
       }
       
       &:focus {
@@ -650,25 +656,25 @@ $red-500: #ef4444;
 
 .property-details-wrapper {
   background: $white;
-  border-radius: 20px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-  padding: clamp(20px, 4vw, 30px);
+  border-radius: 15px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+  padding: clamp(15px, 3vw, 25px);
 }
 
 .property-details-content {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: clamp(20px, 4vw, 30px);
+  gap: clamp(15px, 3vw, 25px);
 }
 
 .image-gallery {
   .main-image-container {
     position: relative;
     height: 0;
-    padding-bottom: 75%; /* 4:3 aspect ratio */
-    border-radius: 15px;
+    padding-bottom: 60%; /* Adjusted aspect ratio */
+    border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
     
     picture, img {
       position: absolute;
@@ -682,26 +688,26 @@ $red-500: #ef4444;
     
     .status-badge {
       position: absolute;
-      top: clamp(10px, 2vw, 15px);
-      left: clamp(10px, 2vw, 15px);
+      top: clamp(8px, 1.5vw, 12px);
+      left: clamp(8px, 1.5vw, 12px);
       background: $success-color;
       color: $white;
-      padding: clamp(5px, 1vw, 6px) clamp(10px, 2vw, 12px);
-      border-radius: 15px;
-      font-size: clamp(0.8rem, 2vw, 0.9rem);
+      padding: clamp(4px, 1vw, 6px) clamp(8px, 1.5vw, 10px);
+      border-radius: 12px;
+      font-size: clamp(0.6rem, 1.5vw, 0.8rem);
       font-weight: 600;
       text-transform: uppercase;
     }
     
     .image-counter {
       position: absolute;
-      top: clamp(10px, 2vw, 15px);
-      right: clamp(10px, 2vw, 15px);
-      background: rgba(0, 0, 0, 0.7);
+      top: clamp(8px, 1.5vw, 12px);
+      right: clamp(8px, 1.5vw, 12px);
+      background: rgba(0, 0, 0, 0.6);
       color: $white;
-      padding: clamp(5px, 1vw, 6px) clamp(10px, 2vw, 12px);
-      border-radius: 15px;
-      font-size: clamp(0.8rem, 2vw, 0.9rem);
+      padding: clamp(4px, 1vw, 6px) clamp(8px, 1.5vw, 10px);
+      border-radius: 12px;
+      font-size: clamp(0.6rem, 1.5vw, 0.8rem);
     }
     
     .nav-button {
@@ -712,14 +718,14 @@ $red-500: #ef4444;
       color: $gray-800;
       border: none;
       border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      font-size: 1.2rem;
+      width: 30px;
+      height: 30px;
+      font-size: 1rem;
       cursor: pointer;
       transition: background 0.3s ease;
       
-      &.left { left: clamp(10px, 2vw, 15px); }
-      &.right { right: clamp(10px, 2vw, 15px); }
+      &.left { left: clamp(8px, 1.5vw, 12px); }
+      &.right { right: clamp(8px, 1.5vw, 12px); }
       
       &:hover {
         background: $white;
@@ -735,16 +741,16 @@ $red-500: #ef4444;
   
   .thumbnail-container {
     display: flex;
-    gap: clamp(8px, 2vw, 12px);
-    margin-top: clamp(10px, 2vw, 15px);
+    gap: clamp(6px, 1.5vw, 10px);
+    margin-top: clamp(8px, 1.5vw, 12px);
     overflow-x: auto;
     padding-bottom: 5px;
     
     .thumbnail {
-      width: clamp(60px, 15vw, 80px);
-      height: clamp(60px, 15vw, 80px);
+      width: clamp(50px, 12vw, 70px);
+      height: clamp(50px, 12vw, 70px);
       object-fit: cover;
-      border-radius: 10px;
+      border-radius: 8px;
       cursor: pointer;
       transition: opacity 0.3s ease, transform 0.3s ease;
       
@@ -764,10 +770,10 @@ $red-500: #ef4444;
 .property-info {
   display: flex;
   flex-direction: column;
-  gap: clamp(15px, 3vw, 20px);
+  gap: clamp(10px, 2vw, 15px);
   
   .property-title {
-    font-size: clamp(1.8rem, 4vw, 2.2rem);
+    font-size: clamp(1.5rem, 4vw, 2rem);
     font-weight: 700;
     color: $dark-color;
   }
@@ -775,52 +781,52 @@ $red-500: #ef4444;
   .property-location {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     color: $gray-600;
-    font-size: clamp(0.9rem, 2vw, 1rem);
+    font-size: clamp(0.7rem, 1.5vw, 0.9rem);
     
     i {
-      font-size: 1.2rem;
+      font-size: 1rem;
     }
   }
   
   .property-price {
-    font-size: clamp(1.5rem, 3.5vw, 1.8rem);
+    font-size: clamp(1.2rem, 3vw, 1.6rem);
     font-weight: 700;
     color: $primary-color;
     
     span {
-      font-size: clamp(0.9rem, 2vw, 1rem);
+      font-size: clamp(0.7rem, 1.5vw, 0.9rem);
       font-weight: 400;
       color: $gray-500;
-      margin-left: 8px;
+      margin-left: 6px;
     }
   }
   
   .property-description {
     color: $gray-700;
-    font-size: clamp(0.9rem, 2vw, 1rem);
-    line-height: 1.6;
+    font-size: clamp(0.7rem, 1.5vw, 0.9rem);
+    line-height: 1.5;
   }
   
   .property-features {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    gap: clamp(8px, 2vw, 12px);
-    padding: clamp(10px, 2vw, 15px);
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: clamp(6px, 1.5vw, 10px);
+    padding: clamp(8px, 1.5vw, 12px);
     background: $blue-50;
-    border-radius: 10px;
+    border-radius: 8px;
     
     .feature {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
-      font-size: clamp(0.8rem, 2vw, 0.9rem);
+      gap: 4px;
+      font-size: clamp(0.6rem, 1.5vw, 0.8rem);
       
       i {
         color: $primary-color;
-        font-size: clamp(1.2rem, 2.5vw, 1.4rem);
+        font-size: clamp(1rem, 2vw, 1.2rem);
       }
       
       span {
@@ -834,8 +840,8 @@ $red-500: #ef4444;
   .additional-details {
     display: flex;
     flex-direction: column;
-    gap: clamp(8px, 2vw, 12px);
-    font-size: clamp(0.9rem, 2vw, 1rem);
+    gap: clamp(6px, 1.5vw, 10px);
+    font-size: clamp(0.7rem, 1.5vw, 0.9rem);
     color: $gray-600;
     
     p {
@@ -852,7 +858,7 @@ $red-500: #ef4444;
       text-decoration: none;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       font-weight: 600;
       
       &:hover {
@@ -865,7 +871,7 @@ $red-500: #ef4444;
       }
       
       i {
-        font-size: 1.2rem;
+        font-size: 1rem;
       }
     }
   }
@@ -875,21 +881,21 @@ $red-500: #ef4444;
       background: linear-gradient(45deg, $primary-color, $blue-700);
       color: $white;
       border: none;
-      padding: clamp(10px, 2vw, 12px) clamp(20px, 4vw, 30px);
-      border-radius: 25px;
-      font-size: clamp(0.9rem, 2vw, 1rem);
+      padding: clamp(6px, 1.5vw, 10px) clamp(12px, 2vw, 18px);
+      border-radius: 15px;
+      font-size: clamp(0.6rem, 1.5vw, 0.8rem);
       font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       width: 100%;
       justify-content: center;
       transition: all 0.3s ease;
       
       &:hover {
         transform: translateY(-2px);
-        box-shadow: 0 5px 10px rgba(0, 123, 255, 0.3);
+        box-shadow: 0 3px 8px rgba(0, 123, 255, 0.3);
       }
       
       &:focus {
@@ -898,7 +904,29 @@ $red-500: #ef4444;
       }
       
       i {
-        font-size: 1.2rem;
+        font-size: 0.9rem;
+      }
+      
+      .map-link {
+        color: $white;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        
+        &:hover {
+          text-decoration: underline;
+        }
+        
+        &:focus {
+          outline: 2px solid $primary-color;
+          outline-offset: 2px;
+        }
+        
+        i {
+          font-size: 0.9rem;
+        }
       }
     }
   }
@@ -906,40 +934,40 @@ $red-500: #ef4444;
 
 .rooms-section {
   background: $white;
-  border-radius: 20px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-  padding: clamp(20px, 4vw, 30px);
-  margin-top: clamp(20px, 4vw, 30px);
+  border-radius: 15px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+  padding: clamp(15px, 3vw, 25px);
+  margin-top: clamp(15px, 3vw, 25px);
   
   .rooms-title {
-    font-size: clamp(1.5rem, 3.5vw, 1.8rem);
+    font-size: clamp(1.2rem, 3vw, 1.5rem);
     font-weight: 700;
     color: $dark-color;
-    margin-bottom: clamp(15px, 3vw, 20px);
+    margin-bottom: clamp(10px, 2vw, 15px);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     
     i {
       color: $primary-color;
-      font-size: 1.4rem;
+      font-size: 1.2rem;
     }
   }
   
   .room-status-summary {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: clamp(10px, 2vw, 15px);
-    margin-bottom: clamp(20px, 4vw, 30px);
+    gap: clamp(8px, 1.5vw, 12px);
+    margin-bottom: clamp(15px, 3vw, 20px);
     
     .status-item {
       background: $gray-100;
-      padding: clamp(10px, 2vw, 15px);
-      border-radius: 10px;
+      padding: clamp(8px, 1.5vw, 12px);
+      border-radius: 8px;
       text-align: center;
       
       .status-count {
-        font-size: clamp(1.5rem, 3.5vw, 1.8rem);
+        font-size: clamp(1.2rem, 3vw, 1.5rem);
         font-weight: 700;
         
         &.available { color: $green-500; }
@@ -948,7 +976,7 @@ $red-500: #ef4444;
       }
       
       .status-label {
-        font-size: clamp(0.8rem, 2vw, 0.9rem);
+        font-size: clamp(0.6rem, 1.5vw, 0.8rem);
         color: $gray-600;
       }
     }
@@ -956,18 +984,18 @@ $red-500: #ef4444;
   
   .rooms-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: clamp(15px, 3vw, 20px);
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: clamp(10px, 2vw, 15px);
   }
   
   .room-card {
     border: 1px solid $gray-200;
-    border-radius: 15px;
+    border-radius: 12px;
     overflow: hidden;
     transition: box-shadow 0.3s ease;
     
     &:hover:not(.unavailable) {
-      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
     }
     
     &.unavailable {
@@ -977,7 +1005,7 @@ $red-500: #ef4444;
     .room-image-container {
       position: relative;
       height: 0;
-      padding-bottom: 66.67%; /* 3:2 aspect ratio */
+      padding-bottom: 60%; /* Adjusted aspect ratio */
       overflow: hidden;
       
       .room-image {
@@ -992,66 +1020,70 @@ $red-500: #ef4444;
       
       .room-status-badge {
         position: absolute;
-        top: clamp(10px, 2vw, 15px);
-        left: clamp(10px, 2vw, 15px);
-        padding: clamp(5px, 1vw, 6px) clamp(8px, 2vw, 10px);
-        border-radius: 10px;
-        font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+        top: clamp(8px, 1.5vw, 12px);
+        left: clamp(8px, 1.5vw, 12px);
+        padding: clamp(3px, 1vw, 5px) clamp(6px, 1.5vw, 8px);
+        border-radius: 8px;
+        font-size: clamp(0.5rem, 1.2vw, 0.7rem);
         font-weight: 600;
         text-transform: uppercase;
       }
       
       .room-category-badge {
         position: absolute;
-        top: clamp(10px, 2vw, 15px);
-        right: clamp(10px, 2vw, 15px);
+        top: clamp(8px, 1.5vw, 12px);
+        right: clamp(8px, 1.5vw, 12px);
         background: $primary-color;
         color: $white;
-        padding: clamp(5px, 1vw, 6px) clamp(8px, 2vw, 10px);
-        border-radius: 10px;
-        font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+        padding: clamp(3px, 1vw, 5px) clamp(6px, 1.5vw, 8px);
+        border-radius: 8px;
+        font-size: clamp(0.5rem, 1.2vw, 0.7rem);
         font-weight: 600;
       }
       
       .room-number-badge {
         position: absolute;
-        bottom: clamp(10px, 2vw, 15px);
-        left: clamp(10px, 2vw, 15px);
+        bottom: clamp(8px, 1.5vw, 12px);
+        left: clamp(8px, 1.5vw, 12px);
         background: $gray-800;
         color: $white;
-        padding: clamp(5px, 1vw, 6px) clamp(8px, 2vw, 10px);
-        border-radius: 10px;
-        font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+        padding: clamp(3px, 1vw, 5px) clamp(6px, 1.5vw, 8px);
+        border-radius: 8px;
+        font-size: clamp(0.5rem, 1.2vw, 0.7rem);
         font-weight: 600;
       }
     }
     
     .room-content {
-      padding: clamp(15px, 3vw, 20px);
+      padding: clamp(10px, 2vw, 15px);
       
       .room-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-bottom: clamp(10px, 2vw, 15px);
+        margin-bottom: clamp(8px, 1.5vw, 12px);
         
-        h3 {
-          font-size: clamp(1.1rem, 2.5vw, 1.3rem);
+        .room-title {
+          font-size: clamp(0.9rem, 2vw, 1.1rem);
           font-weight: 600;
           color: $dark-color;
+          
+          &.small-text {
+            font-size: clamp(0.7rem, 1.5vw, 0.9rem);
+          }
         }
         
         .room-price {
           text-align: right;
           
           span:first-child {
-            font-size: clamp(1rem, 2.5vw, 1.2rem);
+            font-size: clamp(0.8rem, 2vw, 1rem);
             font-weight: 700;
             color: $primary-color;
           }
           
           span:last-child {
-            font-size: clamp(0.8rem, 2vw, 0.9rem);
+            font-size: clamp(0.6rem, 1.5vw, 0.8rem);
             color: $gray-500;
           }
         }
@@ -1060,21 +1092,21 @@ $red-500: #ef4444;
       .room-size {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         color: $gray-600;
-        font-size: clamp(0.8rem, 2vw, 0.9rem);
-        margin-bottom: clamp(10px, 2vw, 15px);
+        font-size: clamp(0.6rem, 1.5vw, 0.8rem);
+        margin-bottom: clamp(6px, 1.5vw, 10px);
         
         i {
-          font-size: 1rem;
+          font-size: 0.9rem;
         }
       }
       
       .room-description {
-        font-size: clamp(0.8rem, 2vw, 0.9rem);
+        font-size: clamp(0.6rem, 1.5vw, 0.8rem);
         color: $gray-600;
-        line-height: 1.6;
-        margin-bottom: clamp(10px, 2vw, 15px);
+        line-height: 1.5;
+        margin-bottom: clamp(6px, 1.5vw, 10px);
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
@@ -1084,15 +1116,15 @@ $red-500: #ef4444;
       .room-features {
         display: flex;
         flex-wrap: wrap;
-        gap: clamp(6px, 1.5vw, 8px);
-        margin-bottom: clamp(10px, 2vw, 15px);
+        gap: clamp(4px, 1vw, 6px);
+        margin-bottom: clamp(6px, 1.5vw, 10px);
         
         .feature-tag {
           background: $gray-100;
           color: $gray-700;
-          padding: clamp(4px, 1vw, 6px) clamp(8px, 2vw, 10px);
-          border-radius: 8px;
-          font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+          padding: clamp(3px, 0.8vw, 5px) clamp(6px, 1.5vw, 8px);
+          border-radius: 6px;
+          font-size: clamp(0.5rem, 1.2vw, 0.7rem);
           font-weight: 500;
           
           &.more {
@@ -1104,13 +1136,13 @@ $red-500: #ef4444;
       
       .room-actions {
         display: flex;
-        gap: clamp(8px, 2vw, 12px);
+        gap: clamp(6px, 1.5vw, 10px);
         
         .action-button {
           flex: 1;
-          padding: clamp(8px, 2vw, 10px);
+          padding: clamp(6px, 1.5vw, 10px);
           border-radius: 10px;
-          font-size: clamp(0.8rem, 2vw, 0.9rem);
+          font-size: clamp(0.6rem, 1.5vw, 0.8rem);
           font-weight: 600;
           text-align: center;
           transition: all 0.3s ease;
@@ -1121,7 +1153,7 @@ $red-500: #ef4444;
             
             &:hover {
               transform: translateY(-2px);
-              box-shadow: 0 3px 6px rgba(0, 123, 255, 0.2);
+              box-shadow: 0 2px 5px rgba(0, 123, 255, 0.2);
             }
             
             &:focus {
@@ -1149,7 +1181,7 @@ $red-500: #ef4444;
             &:hover {
               background: $gray-700;
               transform: translateY(-2px);
-              box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+              box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
             }
             
             &:focus {
@@ -1165,14 +1197,14 @@ $red-500: #ef4444;
 
 .no-rooms {
   background: $white;
-  border-radius: 20px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-  padding: clamp(20px, 4vw, 30px);
+  border-radius: 15px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+  padding: clamp(15px, 3vw, 25px);
   text-align: center;
-  margin-top: clamp(20px, 4vw, 30px);
+  margin-top: clamp(15px, 3vw, 25px);
   
   p {
-    font-size: clamp(0.9rem, 2vw, 1rem);
+    font-size: clamp(0.7rem, 1.5vw, 0.9rem);
     color: $gray-600;
   }
 }
@@ -1186,43 +1218,41 @@ $red-500: #ef4444;
     grid-template-columns: 1fr;
   }
   
-  .image-gallery {
-    .main-image-container {
-      padding-bottom: 66.67%; /* 3:2 aspect ratio */
-    }
+  .image-gallery .main-image-container {
+    padding-bottom: 66.67%; /* 3:2 aspect ratio */
   }
 }
 
 @media (max-width: 768px) {
   .container {
-    padding: 0 clamp(0.5rem, 1.5vw, 0.75rem);
+    padding: 0 clamp(0.3rem, 1.5vw, 0.75rem);
   }
   
   .section-title {
-    margin-bottom: clamp(30px, 5vw, 40px);
+    margin-bottom: clamp(15px, 4vw, 30px);
     
     .title-wrapper {
       .main-title {
-        font-size: clamp(1.8rem, 4.5vw, 2.2rem);
+        font-size: clamp(1.2rem, 4vw, 1.8rem);
       }
       
       .section-description {
-        font-size: clamp(0.8rem, 2vw, 0.9rem);
+        font-size: clamp(0.6rem, 1.5vw, 0.8rem);
       }
     }
   }
   
   .property-details-wrapper {
-    padding: clamp(15px, 3vw, 20px);
+    padding: clamp(10px, 2vw, 15px);
   }
   
   .property-info {
     .property-title {
-      font-size: clamp(1.5rem, 3.5vw, 1.8rem);
+      font-size: clamp(1.2rem, 3vw, 1.5rem);
     }
     
     .property-price {
-      font-size: clamp(1.3rem, 3vw, 1.5rem);
+      font-size: clamp(1rem, 2.5vw, 1.3rem);
     }
     
     .property-features {
@@ -1233,7 +1263,7 @@ $red-500: #ef4444;
   .rooms-section {
     .room-status-summary {
       grid-template-columns: 1fr;
-      gap: clamp(8px, 2vw, 12px);
+      gap: clamp(6px, 1.5vw, 10px);
     }
     
     .rooms-grid {
@@ -1250,28 +1280,28 @@ $red-500: #ef4444;
       .feature {
         flex-direction: row;
         justify-content: center;
-        gap: 8px;
+        gap: 6px;
       }
     }
     
     .additional-details {
-      font-size: clamp(0.8rem, 1.8vw, 0.9rem);
+      font-size: clamp(0.6rem, 1.5vw, 0.7rem);
     }
   }
   
   .rooms-section {
     .rooms-title {
-      font-size: clamp(1.3rem, 3vw, 1.5rem);
+      font-size: clamp(1rem, 2.5vw, 1.2rem);
     }
     
     .room-card {
       .room-content {
-        padding: clamp(10px, 2vw, 15px);
+        padding: clamp(8px, 1.5vw, 12px);
         
         .room-header {
           flex-direction: column;
           align-items: flex-start;
-          gap: 8px;
+          gap: 6px;
         }
         
         .room-price {

@@ -8,7 +8,7 @@ interface IRequestParams {
   params?: Record<string, any>;
   responseType?: 'json' | 'blob';
   requiresAuth?: boolean;
-  onUploadProgress?: (progressEvent: AxiosProgressEvent) => void; // Added to support upload progress
+  onUploadProgress?: (progressEvent: AxiosProgressEvent) => void;
   signal?: AbortSignal;
 }
 
@@ -59,8 +59,8 @@ async function makeRequest<T = any>(options: IRequestParams): Promise<AxiosRespo
       ...options.headers,
     },
     responseType: options.responseType || 'json',
-    withCredentials: options.requiresAuth, // Only send credentials for authenticated requests
-    onUploadProgress: options.onUploadProgress, // Pass onUploadProgress to Axios
+    withCredentials: options.requiresAuth,
+    onUploadProgress: options.onUploadProgress,
     signal: options.signal,
   };
 
@@ -84,7 +84,7 @@ async function makeRequest<T = any>(options: IRequestParams): Promise<AxiosRespo
     headers: config.headers,
     data: options.data instanceof FormData ? 'FormData' : options.data,
     params: options.params,
-    signal: options.signal ? 'AbortSignal' : undefined, // Log signal presence
+    signal: options.signal ? 'AbortSignal' : undefined,
   });
 
   try {
@@ -117,34 +117,7 @@ async function makeRequest<T = any>(options: IRequestParams): Promise<AxiosRespo
     };
     console.error('Request failed:', errorDetails);
 
-    if (isAxiosError && error.response) {
-      const responseData = error.response.data;
-      const responseStatus = error.response.status;
-
-      if (typeof responseData === 'string') {
-        if (responseData.trim().startsWith('{') || responseData.trim().startsWith('[')) {
-          try {
-            const parsedJson = JSON.parse(responseData);
-            const message = parsedJson.message || parsedJson.error || 'An error occurred.';
-            throw new Error(`HTTP ${responseStatus}: ${message}`);
-          } catch (parseError) {
-            throw new Error(`HTTP ${responseStatus}: Failed to parse JSON response from the server.`);
-          }
-        } else {
-          throw new Error(`HTTP ${responseStatus}: The server returned a non-JSON response: ${responseData}`);
-        }
-      }
-
-      if (typeof responseData === 'object' && responseData !== null) {
-        const message = responseData.message || responseData.error || error.message || 'An unknown error occurred.';
-        if (responseStatus === 500) {
-          throw new Error(`Server error: ${message}. Please check server logs for details.`);
-        }
-        throw new Error(`HTTP ${responseStatus}: ${message}`);
-      }
-    }
-
-    throw new Error(`An unexpected error occurred: ${error.message || String(error)}`);
+    throw error; // Throw the original Axios error to preserve response.data
   }
 }
 

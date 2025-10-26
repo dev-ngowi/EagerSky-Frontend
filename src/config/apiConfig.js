@@ -1,7 +1,7 @@
 // config/apiConfig.js
 export const API_CONFIG = {
   // Base configuration
-  BASE_URL: import.meta.env.VITE_APP_API_BASE_URL || 'https://e1.japango.co.tz/api',
+  BASE_URL: import.meta.env.VITE_APP_API_BASE_URL || 'https://app.eagersky.co.tz/api',
   
   // Auth endpoints
   AUTH: {

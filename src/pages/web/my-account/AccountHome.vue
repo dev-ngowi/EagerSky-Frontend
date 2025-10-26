@@ -3,7 +3,7 @@
     <!-- Welcome Header -->
     <div class="welcome-header">
       <h1>Welcome back!</h1>
-      <p>Here's what's happening with your account today.</p>
+      <p>Here's what's happening with your account today.</p> 
     </div>
 
     <!-- Loading State -->
