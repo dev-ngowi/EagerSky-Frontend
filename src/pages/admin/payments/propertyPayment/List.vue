@@ -1,12 +1,12 @@
 <template>
   <div class="card">
     <h2 class="text-xl font-bold mb-4">Property Payments</h2>
-    <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
-      <div class="flex items-center space-x-4 flex-wrap gap-2">
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 gap-4">
+      <div class="flex flex-wrap items-center space-x-0 sm:space-x-4 gap-y-2 lg:gap-4 w-full lg:w-auto">
         <VaInput
           v-model="searchQuery"
           placeholder="Search by room number or payment type..."
-          class="w-64"
+          class="w-full sm:w-64"
           :disabled="loadingPayments"
           @update:modelValue="handleSearchInput"
         />
@@ -17,7 +17,7 @@
           placeholder="Select property"
           value-by="id"
           text-by="title"
-          class="w-64"
+          class="w-full sm:w-64"
           clearable
           :disabled="loadingPayments || loadingProperties"
           @update:modelValue="handlePropertyFilter"
@@ -26,15 +26,16 @@
           v-model="dateRange"
           label="Date Range"
           mode="range"
-          class="w-64"
+          class="w-full sm:w-64"
           :disabled="loadingPayments"
           @update:modelValue="handleDateRangeChange"
         />
-        <VaButton v-if="searchQuery || propertyFilter || dateRange" color="warning" size="small" @click="clearFilters">
+        <VaButton v-if="searchQuery || propertyFilter || dateRange" color="warning" size="small" @click="clearFilters" class="mt-2 sm:mt-0">
           Clear Filters
         </VaButton>
       </div>
-      <div class="flex items-center space-x-4">
+
+      <div class="flex items-center space-x-4 mt-4 lg:mt-0 w-full lg:w-auto justify-end">
         <VaSelect
           v-model="pagination.per_page"
           :options="perPageOptions"
@@ -55,6 +56,7 @@
         </VaButton>
       </div>
     </div>
+
     <VaDataTable
       v-if="payments && payments.length > 0"
       :key="componentKey"
@@ -77,11 +79,12 @@
         <VaButton size="small" color="primary" icon="visibility" @click="openView(rowData)" />
       </template>
     </VaDataTable>
-    <div v-if="payments && payments.length > 0" class="flex justify-between items-center mt-4">
-      <div>
+    
+    <div v-if="payments && payments.length > 0" class="flex flex-col sm:flex-row justify-between items-center mt-4 gap-y-2">
+      <div class="text-sm sm:text-base">
         Showing {{ pagination.from }} to {{ pagination.to }} of {{ pagination.total }} payments
       </div>
-      <div class="flex space-x-2">
+      <div class="flex space-x-2 flex-wrap justify-center">
         <VaButton
           size="small"
           :disabled="pagination.current_page === 1"
@@ -107,6 +110,10 @@
         </VaButton>
       </div>
     </div>
+    <div v-else-if="!loadingPayments" class="text-center py-8 text-gray-500">
+      No payments found. Try clearing the filters.
+    </div>
+
     <VaModal v-model="showView" size="medium" layout="centered" close-button hide-default-actions class="p-4">
       <div class="text-lg font-bold mb-4">Payment Details</div>
       <div v-if="selectedPayment" class="space-y-2">
@@ -747,8 +754,15 @@ export default defineComponent({
   width: 8rem;
 }
 
+/* Updated for responsiveness */
 .w-64 {
   width: 16rem;
+}
+.sm\:w-64 {
+  width: 16rem;
+}
+.w-full {
+  width: 100%;
 }
 
 .border {

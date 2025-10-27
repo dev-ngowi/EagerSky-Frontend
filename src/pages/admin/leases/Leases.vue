@@ -1,12 +1,19 @@
 <template>
   <div class="card">
-    <div class="flex justify-between item-center mb-4">
+    <div class="flex justify-between items-center mb-4">
       <div class="flex items-center space-x-4">
         <VaInput
           v-model="searchQuery"
           placeholder="Search by property, user, or status"
           class="w-64"
           @input="debouncedSearch"
+        />
+        <VaSelect
+          v-model="pagination.per_page"
+          :options="[10, 25, 50]"
+          placeholder="Items per page"
+          class="w-32"
+          @update:modelValue="changePerPage"
         />
       </div>
       <div class="flex space-x-2">
@@ -27,14 +34,13 @@
     </div>
     <template v-if="!addEditForm">
       <VaDataTable
-        :key="componentKey"
         :items="leases"
         striped
         :columns="columns"
         :loading="loadingLeases"
         :per-page="pagination.per_page"
         :current-page="pagination.current_page"
-        @update:currentPage="changePage"
+        @update:currentPage="debouncedChangePage"
       >
         <template #cell(sn)="{ rowIndex }">
           {{ (pagination.current_page - 1) * pagination.per_page + rowIndex + 1 }}
@@ -55,14 +61,14 @@
           <VaButton
             size="small"
             :disabled="pagination.current_page === 1"
-            @click="changePage(pagination.current_page - 1)"
+            @click="debouncedChangePage(pagination.current_page - 1)"
           >
             Previous
           </VaButton>
           <VaButton
             size="small"
             :disabled="pagination.current_page === pagination.last_page"
-            @click="changePage(pagination.current_page + 1)"
+            @click="debouncedChangePage(pagination.current_page + 1)"
           >
             Next
           </VaButton>
@@ -139,7 +145,6 @@ export default defineComponent({
       showView: false,
       selectedLease: null as Lease | null,
       formMode: 'add' as 'add' | 'edit',
-      componentKey: 0,
       deleting: false,
       submitting: false,
       loadingLeases: false,
@@ -157,11 +162,18 @@ export default defineComponent({
         },
         500
       ) as () => void,
+      debouncedChangePage: debounce(
+        function (this: any, page: number) {
+          return this.changePage(page)
+        },
+        500,
+        { leading: true, trailing: false }
+      ) as (page: number) => void,
     }
   },
   mounted() {
     console.log('Leases mounted, fetching leases')
-    this.getLeases({ page: 1, per_page: 10 })
+    this.getLeases({ page: 1, per_page: this.pagination.per_page })
   },
   methods: {
     async getLeases(params: { page?: number; per_page?: number; search?: string } = {}) {
@@ -171,7 +183,7 @@ export default defineComponent({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/leases`,
           method: 'get',
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+            Authorization: `Bearer ${localStorage.getItem('authToken') || ''}`,
             Accept: 'application/json',
           },
           params: {
@@ -182,6 +194,9 @@ export default defineComponent({
         })
         console.log('getLeases response:', response)
         if (response.status === 200) {
+          if (!response.data.pagination) {
+            throw new Error('Pagination metadata missing in API response')
+          }
           this.leases = response.data.data.map((lease: any) => ({
             id: lease.id,
             property_id: lease.property_id,
@@ -198,10 +213,10 @@ export default defineComponent({
             deleted_at: lease.deleted_at ? format(new Date(lease.deleted_at), 'd MMMM yyyy') : null,
           }))
           this.pagination = {
-            total: response.data.pagination?.total || response.data.data.length,
-            per_page: response.data.pagination?.per_page || params.per_page || 10,
-            current_page: response.data.pagination?.current_page || params.page || 1,
-            last_page: response.data.pagination?.last_page || 1,
+            total: response.data.pagination.total,
+            per_page: response.data.pagination.per_page,
+            current_page: response.data.pagination.current_page,
+            last_page: response.data.pagination.last_page,
           }
           this.searchQuery = params.search || this.searchQuery
           if (response.data.data.length === 0) {
@@ -228,20 +243,38 @@ export default defineComponent({
         }
         return response
       } catch (error: any) {
-        console.error('getLeases error:', error.response?.data || error.message)
+        console.error('getLeases error:', error)
         Swal.fire({
           title: 'Error!',
-          text: error.response?.data?.message || error.message || 'Failed to fetch leases.',
+          text: error.message || 'Failed to fetch leases.',
           icon: 'error',
           position: 'top-end',
           toast: true,
           showConfirmButton: false,
           timer: 5000,
         })
-        return { status: 'error', message: error.response?.data?.message || error.message }
+        return { status: 'error', message: error.message || 'Failed to fetch leases.' }
       } finally {
         this.loadingLeases = false
       }
+    },
+    async changePage(page: number) {
+      if (page < 1 || page > this.pagination.last_page) {
+        console.warn(`Invalid page number: ${page}`)
+        return
+      }
+      console.log('Changing page to:', page)
+      await this.getLeases({ page, per_page: this.pagination.per_page, search: this.searchQuery })
+    },
+    async changePerPage(perPage: number) {
+      console.log('Changing per page to:', perPage)
+      this.pagination.per_page = perPage
+      this.pagination.current_page = 1
+      await this.getLeases({ page: 1, per_page: perPage, search: this.searchQuery })
+    },
+    async handleSearch() {
+      console.log('Searching with query:', this.searchQuery)
+      await this.getLeases({ page: 1, per_page: this.pagination.per_page, search: this.searchQuery })
     },
     openAddForm() {
       console.log('Opening add form')
@@ -287,7 +320,7 @@ export default defineComponent({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/leases/${this.selectedLease.id}`,
           method: 'delete',
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+            Authorization: `Bearer ${localStorage.getItem('authToken') || ''}`,
             Accept: 'application/json',
           },
         })
@@ -303,7 +336,6 @@ export default defineComponent({
             toast: true,
           })
           this.selectedLease = null
-          this.componentKey += 1
           await this.getLeases({
             page: this.pagination.current_page,
             per_page: this.pagination.per_page,
@@ -346,7 +378,7 @@ export default defineComponent({
             url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/leases`,
             method: 'post',
             headers: {
-              Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+              Authorization: `Bearer ${localStorage.getItem('authToken') || ''}`,
               Accept: 'application/json',
               'Content-Type': 'application/json',
             },
@@ -357,7 +389,7 @@ export default defineComponent({
             url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/leases/${this.selectedLease!.id}`,
             method: 'put',
             headers: {
-              Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+              Authorization: `Bearer ${localStorage.getItem('authToken') || ''}`,
               Accept: 'application/json',
               'Content-Type': 'application/json',
             },
@@ -380,10 +412,8 @@ export default defineComponent({
             per_page: this.pagination.per_page,
             search: this.searchQuery,
           })
-          this.componentKey += 1
           this.closeForm()
         } else {
-          console.warn(`${mode} failed with status:`, response.status, response.data)
           let errorMessage =
             response.data?.message || (mode === 'add' ? 'Failed to add lease.' : 'Failed to update lease.')
           if (response.status === 422 && response.data?.errors) {
@@ -400,7 +430,6 @@ export default defineComponent({
           })
         }
       } catch (error: any) {
-        console.error(`${mode} error:`, error.response || error)
         let errorMessage =
           error.response?.data?.message || (mode === 'add' ? 'Failed to add lease.' : 'Failed to update lease.')
         if (error.response?.status === 422 && error.response?.data?.errors) {
@@ -419,16 +448,6 @@ export default defineComponent({
         this.submitting = false
       }
     },
-    async handleSearch() {
-      console.log('Searching with query:', this.searchQuery)
-      await this.getLeases({ page: 1, per_page: this.pagination.per_page, search: this.searchQuery })
-      this.componentKey += 1
-    },
-    async changePage(page: number) {
-      console.log('Changing page to:', page)
-      await this.getLeases({ page, per_page: this.pagination.per_page, search: this.searchQuery })
-      this.componentKey += 1
-    },
     cancelAdding() {
       this.closeForm()
       this.getLeases({
@@ -446,7 +465,6 @@ export default defineComponent({
     },
   },
 })
-
 </script>
 
 <style scoped>
@@ -454,23 +472,14 @@ export default defineComponent({
   background-color: #ffffff;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   border-radius: 0.5rem;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
-  padding-top: 1.5rem;
-  padding-bottom: 1.5rem;
+  padding: 1.5rem;
 
   @media screen and (max-width: 768px) {
-    padding-left: 1rem;
-    padding-right: 1rem;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
+    padding: 1rem;
   }
 
   @media screen and (max-width: 480px) {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
+    padding: 0.5rem;
   }
 }
 
@@ -504,5 +513,9 @@ export default defineComponent({
 
 .w-64 {
   width: 16rem;
+}
+
+.w-32 {
+  width: 8rem;
 }
 </style>

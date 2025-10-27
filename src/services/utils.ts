@@ -14,9 +14,9 @@ export const validators = {
     return pattern.test(value) || `Must be exactly ${length} digits`
   },
 }
+
 // enum
 export enum PISTON_SUBURL {
-  // '/execute',
   EXECUTE = '/execute',
   RUNTIMES = '/runtimes',
 }
@@ -129,6 +129,7 @@ export const publicationStatusOptions = [
   { value: 'published', text: 'Published' },
   { value: 'draft', text: 'Draft' },
 ]
+
 export const levelOptions = [
   { value: 'beginner', text: 'Beginner' },
   { value: 'intermediate', text: 'Intermediate' },

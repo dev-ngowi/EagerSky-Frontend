@@ -76,10 +76,12 @@
             <VaInput
               v-model="form.nida_number"
               label="NIDA Number"
-              placeholder="Enter NIDA number"
+              placeholder="Enter 20-digit NIDA number"
               :error-messages="errors.nida_number ? [errors.nida_number] : []"
               :disabled="isSubmitting"
               required
+              type="text"
+              pattern="[0-9]{20}"
             />
           </div>
           <div v-if="form.employment_status === 'student'" class="mb-4">
@@ -137,7 +139,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType, reactive, ref } from 'vue';
+import { defineComponent, PropType, reactive, ref, watch } from 'vue';
 import makeRequest from '../../../../services/makeRequest';
 import Swal from 'sweetalert2';
 import type { RentalApplication, FormData, Errors, Payload, Option, StatusOption } from '../../../../types/rentalApplication';
@@ -159,7 +161,7 @@ export default defineComponent({
       property_id: null,
       user_id: null,
       branch_id: null,
-      status: '',
+      status: 'pending',
       employment_status: '',
       nida_number: '',
       student_registration_number: '',
@@ -208,42 +210,69 @@ export default defineComponent({
       return this.application?.id ?? null;
     },
   },
+  watch: {
+    'application': {
+      handler(newApplication) {
+        if (newApplication) {
+          this.initializeForm();
+        }
+      },
+      immediate: true,
+      deep: true,
+    },
+    'form.employment_status'(newVal) {
+      if (newVal !== 'student') {
+        this.form.student_registration_number = '';
+        this.errors.student_registration_number = '';
+      }
+    },
+    'form.user_id': {
+      handler() {
+        this.checkExistingApplication();
+      },
+      immediate: true,
+    },
+    'form.property_id': {
+      handler() {
+        this.checkExistingApplication();
+      },
+      immediate: true,
+    },
+  },
   mounted() {
-    console.log('RentalApplicationEdit mounted, received application:', JSON.stringify(this.application, null, 2));
-    this.initializeForm();
     this.loadDropdowns();
   },
   methods: {
     initializeForm() {
+      if (!this.application) return;
       this.form.property_id = this.application?.property_id ? Number(this.application.property_id) : null;
       this.form.user_id = this.application?.user_id ? Number(this.application.user_id) : null;
       this.form.branch_id = this.application?.branch_id ? Number(this.application.branch_id) : null;
       this.form.status = this.application?.status || 'pending';
       this.form.employment_status = this.application?.employment_status || '';
       this.form.nida_number = this.application?.nida_number || '';
-      this.form.student_registration_number = this.application?.student_registration_number || '';
-      this.form.annual_income = this.application?.annual_income ?? null;
+      this.form.student_registration_number = this.application?.employment_status === 'student' ? this.application?.student_registration_number || '' : '';
+      this.form.annual_income = this.application?.annual_income ? Number(this.application.annual_income) : null;
       this.form.background_check_status = this.application?.background_check_status || '';
       this.form.credit_report_status = this.application?.credit_report_status || '';
-      console.log('Initial form state:', JSON.stringify(this.form, null, 2));
     },
     async loadDropdowns() {
       try {
         await Promise.all([this.fetchProperties(), this.fetchUsers(), this.fetchBranches()]);
-        console.log('Dropdown data loaded:', {
-          properties: this.properties,
-          users: this.users,
-          branches: this.branches,
-        });
         if (this.users.length === 0) {
           Swal.fire({
             title: 'Warning!',
-            text: 'No users available. Please add users first.',
+            text: 'No users available. Please add users with role "Tenant" in the admin panel.',
             icon: 'warning',
             position: 'top-end',
             toast: true,
-            showConfirmButton: false,
-            timer: 3000,
+            showConfirmButton: true,
+            confirmButtonText: 'Go to Users',
+            timer: 5000,
+          }).then((result) => {
+            if (result.isConfirmed) {
+              this.$router.push('/admin/users');
+            }
           });
         }
       } catch (error: any) {
@@ -267,7 +296,6 @@ export default defineComponent({
           method: 'get',
           headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`, Accept: 'application/json' },
         });
-        console.log('Properties response:', response);
         if (response.status === 200) {
           this.properties = response.data.data.map((property: any) => ({
             value: Number(property.id),
@@ -275,7 +303,6 @@ export default defineComponent({
               ? property.title
               : `Unnamed Property (ID: ${property.id})`,
           }));
-          console.log('Properties fetched:', this.properties);
         } else {
           throw new Error(response.data?.message || 'Failed to fetch properties.');
         }
@@ -303,15 +330,13 @@ export default defineComponent({
           headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`, Accept: 'application/json' },
           params: { role_id: 3 }, // Assuming role_id 3 for tenants
         });
-        console.log('Users response:', response);
         if (response.status === 200) {
           this.users = response.data.data.map((user: any) => ({
             value: Number(user.id),
-            text: user.name && typeof user.name === 'string' && user.name.trim()
-              ? user.name
+            text: user.first_name && user.last_name
+              ? `${user.first_name} ${user.last_name}`.trim()
               : `User ${user.id}`,
           }));
-          console.log('Users fetched:', this.users);
         } else {
           throw new Error(response.data?.message || 'Failed to fetch users.');
         }
@@ -338,7 +363,6 @@ export default defineComponent({
           method: 'get',
           headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`, Accept: 'application/json' },
         });
-        console.log('Branches response:', response);
         if (response.status === 200) {
           this.branches = response.data.data.map((branch: any) => ({
             value: Number(branch.id),
@@ -346,7 +370,6 @@ export default defineComponent({
               ? branch.name
               : `Branch ${branch.id}`,
           }));
-          console.log('Branches fetched:', this.branches);
         } else {
           throw new Error(response.data?.message || 'Failed to fetch branches.');
         }
@@ -365,9 +388,44 @@ export default defineComponent({
         this.loadingBranches = false;
       }
     },
+    async checkExistingApplication() {
+      if (!this.form.user_id || !this.form.property_id || !this.applicationId) return;
+      try {
+        const response = await makeRequest({
+          url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/rental-applications`,
+          method: 'get',
+          headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`, Accept: 'application/json' },
+          params: {
+            user_id: this.form.user_id,
+            property_id: this.form.property_id,
+            status: 'pending',
+          },
+        });
+        if (response.status === 200 && response.data.data.length > 0) {
+          const otherApplications = response.data.data.filter((app: any) => Number(app.id) !== this.applicationId);
+          if (otherApplications.length > 0) {
+            this.errors.user_id = 'A pending application already exists for this user and property.';
+            Swal.fire({
+              title: 'Warning!',
+              text: 'A pending application already exists for this user and property.',
+              icon: 'warning',
+              position: 'top-end',
+              toast: true,
+              showConfirmButton: false,
+              timer: 3000,
+            });
+          } else {
+            this.errors.user_id = '';
+          }
+        } else {
+          this.errors.user_id = '';
+        }
+      } catch (error: any) {
+        console.error('checkExistingApplication error:', error.message, error.response?.data);
+      }
+    },
     async submitForm() {
       if (!this.applicationId) {
-        console.error('Invalid application ID:', this.applicationId);
         Swal.fire({
           title: 'Error!',
           text: 'Invalid application ID. Cannot update application.',
@@ -384,18 +442,27 @@ export default defineComponent({
       Object.keys(this.errors).forEach((key) => (this.errors[key as keyof Errors] = ''));
 
       if (!this.form.property_id) this.errors.property_id = 'Property is required';
-      if (!this.form.user_id) this.errors.user_id = 'User is required';
+      if (!this.form.user_id || isNaN(this.form.user_id) || !this.users.some(user => user.value === this.form.user_id)) {
+        this.errors.user_id = 'Please select a valid user';
+      }
       if (!this.form.status) this.errors.status = 'Status is required';
+      if (!['pending', 'approved', 'rejected'].includes(this.form.status)) {
+        this.errors.status = 'Invalid status selected';
+      }
       if (!this.form.employment_status) this.errors.employment_status = 'Employment status is required';
-      if (!this.form.nida_number) this.errors.nida_number = 'NIDA number is required';
-      else if (this.form.nida_number.length < 20) this.errors.nida_number = 'NIDA number must be at least 20 characters';
-      if (this.form.employment_status === 'student' && !this.form.student_registration_number)
+      if (!this.form.nida_number) {
+        this.errors.nida_number = 'NIDA number is required';
+      } else if (!/^\d{20}$/.test(this.form.nida_number)) {
+        this.errors.nida_number = 'NIDA number must be exactly 20 digits';
+      }
+      if (this.form.employment_status === 'student' && !this.form.student_registration_number) {
         this.errors.student_registration_number = 'Student registration number is required for students';
-      if (this.form.annual_income === null || this.form.annual_income < 0)
+      }
+      if (this.form.annual_income === null || this.form.annual_income < 0) {
         this.errors.annual_income = 'Annual income must be a non-negative number';
+      }
 
       if (Object.values(this.errors).some((error) => error)) {
-        console.log('Validation errors:', this.errors);
         return;
       }
 
@@ -409,11 +476,10 @@ export default defineComponent({
           employment_status: this.form.employment_status,
           nida_number: this.form.nida_number,
           student_registration_number: this.form.employment_status === 'student' ? this.form.student_registration_number : null,
-          annual_income: this.form.annual_income!,
+          annual_income: Number(this.form.annual_income),
           background_check_status: this.form.background_check_status || null,
           credit_report_status: this.form.credit_report_status || null,
         };
-        console.log('Submitting payload:', payload);
 
         const response = await makeRequest({
           url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/rental-applications/${this.applicationId}`,
@@ -422,7 +488,6 @@ export default defineComponent({
           data: payload,
         });
 
-        console.log('Submit response:', response);
         if (response.status === 200) {
           Swal.fire({
             title: 'Success!',
@@ -443,9 +508,10 @@ export default defineComponent({
         let errorMessage = error.response?.data?.message || 'Failed to update rental application.';
         if (error.response?.status === 422) {
           if (errorMessage === 'A pending application already exists for this user and property') {
+            this.errors.user_id = errorMessage;
             Swal.fire({
               title: 'Error!',
-              text: 'A pending application already exists for this user and property.',
+              text: errorMessage,
               icon: 'error',
               position: 'top-end',
               toast: true,
@@ -500,7 +566,6 @@ export default defineComponent({
       }
     },
     resetForm() {
-      console.log('Resetting form to original application:', JSON.stringify(this.application, null, 2));
       this.initializeForm();
       Object.keys(this.errors).forEach((key) => (this.errors[key as keyof Errors] = ''));
       this.$emit('close');

@@ -1,7 +1,10 @@
 export interface Booking {
   id: number;
-  property_id: number;
-  property_title: string;
+  booking_property_type_id: number;
+  booking_property_type_name?: string;
+  properties?: { id: number; title: string }[];
+  // FIX: Added 'id' to the room object to match component logic (r.id)
+  rooms?: { id: number; room_id: number; room_number: string; property_id?: number; }[];
   client_id: number;
   client_fullname: string;
   appointment_type_id: number;
@@ -11,12 +14,17 @@ export interface Booking {
   time_slot: string;
   recurrence: string;
   status: string;
+  notes: string;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
 }
 
 export interface FormData {
-  property_id: number | null;
+  id?: number;
+  booking_property_type_id: number | null;
+  property_ids: number[];
+  room_ids: number[];
   client_id: number | null;
   appointment_type_id: number | null;
   date: string;
@@ -24,6 +32,7 @@ export interface FormData {
   time_slot: string;
   recurrence: string;
   status: string;
+  notes: string;
 }
 
 export interface Pagination {
@@ -37,22 +46,24 @@ export interface GetBookingsParams {
   page?: number;
   per_page?: number;
   search?: string;
-}
-
-export interface AddBookingPayload extends FormData {}
-
-export interface UpdateBookingPayload extends FormData {
-  id: number;
+  status?: string;
 }
 
 export interface ErrorResponseData {
-  message: string;
+  message?: string;
   errors?: Record<string, string[]>;
 }
 
-// Added missing type: Errors
-export interface Errors {
-  property_id: boolean;
+export interface Option {
+  value: number | string;
+  text: string;
+}
+
+export type Errors = {
+  booking_property_type_id: boolean;
+  property_ids: boolean;
+  room_ids: boolean;
+  selected_property: boolean;
   client_id: boolean;
   appointment_type_id: boolean;
   date: boolean;
@@ -60,11 +71,14 @@ export interface Errors {
   time_slot: boolean;
   recurrence: boolean;
   status: boolean;
-}
+  notes: boolean;
+};
 
-// Added missing type: ErrorMessages
-export interface ErrorMessages {
-  property_id: string;
+export type ErrorMessages = {
+  booking_property_type_id: string;
+  property_ids: string;
+  room_ids: string;
+  selected_property: string;
   client_id: string;
   appointment_type_id: string;
   date: string;
@@ -72,15 +86,5 @@ export interface ErrorMessages {
   time_slot: string;
   recurrence: string;
   status: string;
-}
-
-// Added missing type: Option
-export interface Option {
-  value: number | string;
-  text: string;
-}
-
-// Added missing type: ApiResponse
-export type ApiResponse<T> =
-  | { status: 200 | 201 | 204; data: T }
-  | { status: 422 | number; data: ErrorResponseData };
+  notes: string;
+};

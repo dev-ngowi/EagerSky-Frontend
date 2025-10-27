@@ -11,13 +11,14 @@ export interface FormData {
   status: string | null
   list_date: string | null
   branch_id: number | null
+  team_id: number | null
   is_featured: boolean
 }
 
 export interface Image {
-  id: number;
-  url: string;
-  alt?: string;
+  id: number
+  url: string
+  alt?: string
 }
 
 export interface Errors {
@@ -33,6 +34,7 @@ export interface Errors {
   status: string
   list_date: string
   branch_id: string
+  team_id: string
   is_featured: string
 }
 
@@ -49,6 +51,7 @@ export interface Payload {
   status: string | null
   list_date: string | null
   branch_id: number | null
+  team_id: number | null
   is_featured: boolean
 }
 
@@ -67,6 +70,7 @@ export interface Property {
   list_date: string | null
   user: string | null
   branch_id: number | null
+  team_id: number | null
   is_featured: boolean
   created_at: string | null
 }

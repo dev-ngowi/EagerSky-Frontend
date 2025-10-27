@@ -29,9 +29,14 @@
               </VaListItemSection>
               <VaListItemSection>
                 <p class="text-sm font-medium cursor-pointer" @click="handleNotificationClick(item)">
-                  {{ item.message || 'N/A' }}
+                  {{ item.message || 'No message' }}
                 </p>
-                <p class="text-xs text-gray-500">{{ item.updateTimestamp }}</p>
+                <p class="text-xs text-gray-500">
+                  Created: {{ item.createdTimestamp }} 
+                  <span v-if="item.updatedTimestamp !== item.createdTimestamp">
+                    (Updated: {{ item.updatedTimestamp }})
+                  </span>
+                </p>
               </VaListItemSection>
               <VaListItemSection icon class="mx-1">
                 <VaButton
@@ -71,6 +76,8 @@ import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { debounce } from 'lodash';
 import Swal from 'sweetalert2';
+import { parseISO, formatDistanceToNow, format } from 'date-fns';
+import { enUS } from 'date-fns/locale';
 import makeRequest from '../../../../services/makeRequest';
 import VaIconNotification from '../../../icons/VaIconNotification.vue';
 import { useRouter } from 'vue-router';
@@ -78,6 +85,26 @@ import { useRouter } from 'vue-router';
 const { t, locale } = useI18n();
 const router = useRouter();
 const API_BASE_URL = import.meta.env.VITE_APP_API_BASE_URL || 'https://app.eagersky.co.tz';
+
+// ---------------------------------------------
+// NEW: Logic to determine the authenticated user's role
+// This function attempts to parse 'auth_user' from localStorage and retrieve the role.
+function getAuthUserRole(): string | null {
+    try {
+        const userJSON = localStorage.getItem('auth_user');
+        if (userJSON) {
+            const user = JSON.parse(userJSON);
+            // Assuming the role is stored under a 'role' property on the user object
+            return user.role || null; 
+        }
+    } catch (e) {
+        console.warn('Could not parse auth_user from localStorage.', e);
+    }
+    return null;
+}
+
+const userRole = ref<string | null>(getAuthUserRole());
+// ---------------------------------------------
 
 // State
 const notifications = ref<Notification[]>([]);
@@ -95,54 +122,56 @@ interface Notification {
   created_at: string;
   updated_at: string;
   separator?: boolean;
-  updateTimestamp: string;
+  createdTimestamp: string;
+  updatedTimestamp: string;
   booking_id?: number;
   client_message_id?: number;
 }
 
 // Computed
-const unreadCount = computed(() => notifications.value.filter(n => n.status === 'pending').length);
+const unreadCount = computed(() => {
+  const count = notifications.value.filter(n => n.status?.toLowerCase() === 'pending').length;
+  // console.log('Unread count:', count, 'Notifications:', notifications.value);
+  return count;
+});
 
 const notificationsWithRelativeTime = computed(() => {
-  const rtf = new Intl.RelativeTimeFormat(locale.value, { style: 'short' });
-  const TIME_NAMES = {
-    second: 1000,
-    minute: 1000 * 60,
-    hour: 1000 * 60 * 60,
-    day: 1000 * 60 * 60 * 24,
-    week: 1000 * 60 * 60 * 24 * 7,
-    month: 1000 * 60 * 60 * 24 * 30,
-    year: 1000 * 60 * 60 * 24 * 365,
-  };
-
-  const getTimeName = (differenceTime: number) => {
-    return Object.keys(TIME_NAMES).reduce(
-      (acc, key) => (TIME_NAMES[key as keyof typeof TIME_NAMES] < differenceTime ? key : acc),
-      'month',
-    ) as keyof typeof TIME_NAMES;
-  };
+  const currentDate = new Date();
+  // Set EAT timezone offset (UTC+3) - Note: date-fns usually handles timezones, 
+  // but this local adjustment is kept if the server returns UTC and the display 
+  // needs to be relative to EAT.
+  const eatOffset = 3 * 60; // 3 hours in minutes
+  currentDate.setMinutes(currentDate.getMinutes() + currentDate.getTimezoneOffset() + eatOffset);
 
   const list = displayAllNotifications.value
     ? notifications.value
     : notifications.value.slice(0, baseNumberOfVisibleNotifications);
 
   return list.map((item, index) => {
-    const timeDifference = Math.round(new Date().getTime() - new Date(item.created_at).getTime());
-    const timeName = getTimeName(timeDifference);
+    const createdDate = parseISO(item.created_at);
+    // const updatedDate = parseISO(item.updated_at); // updatedDate is not currently used in formatting
+
+    const createdTimestamp = formatDistanceToNow(createdDate, {
+      addSuffix: true,
+      locale: enUS,
+    });
+    // Use format for updatedTimestamp to display the actual date/time
+    const updatedTimestamp = format(parseISO(item.updated_at), 'MMM d, yyyy h:mm a'); 
 
     let separator = false;
     const nextItem = list[index + 1];
     if (nextItem) {
-      const nextItemDifference = Math.round(new Date().getTime() - new Date(nextItem.created_at).getTime());
-      const nextItemTimeName = getTimeName(nextItemDifference);
-      if (timeName !== nextItemTimeName) {
+      const nextCreatedDate = parseISO(nextItem.created_at);
+      const timeDifference = createdDate.getTime() - nextCreatedDate.getTime();
+      if (Math.abs(timeDifference) > 24 * 60 * 60 * 1000) { // Separate if > 1 day
         separator = true;
       }
     }
 
     return {
       ...item,
-      updateTimestamp: rtf.format(-1 * Math.round(timeDifference / TIME_NAMES[timeName]), timeName),
+      createdTimestamp,
+      updatedTimestamp,
       separator,
     };
   });
@@ -166,7 +195,7 @@ const routeExists = (routeName: string) => {
   try {
     return !!router.resolve({ name: routeName }).matched.length;
   } catch (e) {
-    console.error(`Route check failed for ${routeName}:`, e);
+    // console.error(`Route check failed for ${routeName}:`, e);
     return false;
   }
 };
@@ -178,7 +207,10 @@ const fetchNotifications = async () => {
     const queryParams = new URLSearchParams({
       per_page: '10',
       status: 'pending',
+      // NEW: Conditionally add the user role to the query parameters
+      ...(userRole.value && { role: userRole.value }),
     }).toString();
+
     const response = await makeRequest({
       method: 'GET',
       url: `${API_BASE_URL}/v1/notifications?${queryParams}`,
@@ -187,7 +219,7 @@ const fetchNotifications = async () => {
         Accept: 'application/json',
       },
     });
-    console.log('fetchNotifications response:', response);
+    // console.log('fetchNotifications response:', response);
 
     if (response.status === 200) {
       let notificationData = response.data.data;
@@ -197,23 +229,24 @@ const fetchNotifications = async () => {
         } else if (Array.isArray(response.data)) {
           notificationData = response.data;
         } else {
-          console.warn('Unexpected response.data.data format:', response.data);
+          console.warn('Unexpected response format:', response.data);
           notificationData = [];
         }
       }
 
       notifications.value = notificationData.map((notif: any) => ({
-        id: notif.id,
-        message: notif.message || 'N/A',
+        id: notif.id ?? 0,
+        message: notif.message || 'No message',
         icon: mapNotificationTypeToIcon(notif.type),
-        status: notif.status || 'N/A',
-        type: notif.type || 'N/A',
-        created_at: notif.created_at || '',
-        updated_at: notif.updated_at || '',
-        booking_id: notif.booking_id || undefined,
-        client_message_id: notif.client_message_id || undefined,
+        status: notif.status || 'pending',
+        type: notif.type || 'unknown',
+        created_at: notif.created_at || new Date().toISOString(),
+        updated_at: notif.updated_at || notif.created_at || new Date().toISOString(),
+        booking_id: notif.booking_id ?? undefined,
+        client_message_id: notif.client_message_id ?? undefined,
       }));
     } else {
+      console.error('Unexpected response status:', response.status);
       showToast('error', response.data?.message || 'Failed to fetch notifications');
       notifications.value = [];
     }
@@ -238,10 +271,11 @@ const markAsRead = async (id: number) => {
         Accept: 'application/json',
       },
     });
-    console.log('markAsRead response:', response);
+    // console.log('markAsRead response:', response);
     if (response.status === 200) {
       showToast('success', response.data.message || 'Notification marked as read');
-      await fetchNotifications();
+      // Fetch new list to update state and count
+      await fetchNotifications(); 
     } else {
       showToast('error', response.data?.message || 'Failed to mark notification as read');
     }
@@ -254,7 +288,7 @@ const markAsRead = async (id: number) => {
 const markAllAsRead = async () => {
   try {
     const promises = notifications.value
-      .filter(n => n.status === 'pending')
+      .filter(n => n.status.toLowerCase() === 'pending')
       .map(n => makeRequest({
         method: 'POST',
         url: `${API_BASE_URL}/v1/notifications/${n.id}/approve`,
@@ -263,9 +297,14 @@ const markAllAsRead = async () => {
           Accept: 'application/json',
         },
       }));
-    await Promise.all(promises);
-    showToast('success', 'All notifications marked as read');
-    await fetchNotifications();
+    const responses = await Promise.all(promises);
+    if (responses.every(r => r.status === 200)) {
+      showToast('success', 'All notifications marked as read');
+      // Fetch new list to update state and count
+      await fetchNotifications(); 
+    } else {
+      showToast('error', 'Failed to mark some notifications as read');
+    }
   } catch (error: any) {
     console.error('markAllAsRead error:', error.response?.data || error.message);
     showToast('error', error.response?.data?.message || 'Failed to mark all notifications as read');
@@ -276,18 +315,25 @@ const markAllAsRead = async () => {
 const handleNotificationClick = (notification: Notification) => {
   let routeName: string;
   if (notification.type === 'client_message' && notification.client_message_id) {
+    // Assuming 'client-message' is the route name for a specific message/chat
     routeName = 'client-message';
   } else if (notification.type === 'booking_created' && notification.booking_id) {
+    // Navigate to a specific booking detail
     routeName = 'BookingDetail';
   } else if (notification.type === 'booking_created') {
+    // Navigate to the general bookings list
     routeName = 'bookings';
   } else {
+    // Fallback to the general notifications page
     routeName = 'notifications';
   }
 
   if (routeExists(routeName)) {
     if (routeName === 'BookingDetail' && notification.booking_id) {
       router.push({ name: routeName, params: { id: notification.booking_id } });
+    } else if (routeName === 'client-message' && notification.client_message_id) {
+        // Assuming client-message is a specific message or chat route that takes an ID
+        router.push({ name: routeName, params: { id: notification.client_message_id } });
     } else {
       router.push({ name: routeName });
     }
@@ -298,7 +344,7 @@ const handleNotificationClick = (notification: Notification) => {
 };
 
 // Map notification type to icon
-const mapNotificationTypeToIcon = (type: string) => {
+const mapNotificationTypeToIcon = (type: string | undefined): string => {
   const iconMap: { [key: string]: string } = {
     client_message: 'email',
     booking_created: 'calendar_today',
@@ -310,15 +356,19 @@ const mapNotificationTypeToIcon = (type: string) => {
     trial_expired: 'error_outline',
     report_added: 'calendar_today',
     request_pending: 'favorite_outline',
+    unknown: 'notifications',
   };
-  return iconMap[type] || 'notifications';
+  return iconMap[type || 'unknown'] || 'notifications';
 };
 
 // Lifecycle Hooks
-fetchNotifications();
+// Debounced call is good practice to prevent excessive calls, 
+// e.g., if this component is rendered multiple times quickly.
+debouncedFetchNotifications(); 
 </script>
 
 <style lang="scss" scoped>
+// Your CSS styles remain the same
 .notification-dropdown {
   cursor: pointer;
 

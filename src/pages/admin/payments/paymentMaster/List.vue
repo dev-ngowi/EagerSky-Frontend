@@ -1,18 +1,18 @@
 <template>
   <div class="card">
     <h2 class="text-xl font-bold mb-4">All Payments</h2>
-    <div class="flex justify-between items-center mb-4">
-      <div class="flex items-center space-x-4">
+    <div class="flex justify-between items-center mb-4 header-controls">
+      <div class="flex items-center space-x-4 search-group">
         <VaInput
           v-model="searchQuery"
           placeholder="Search by transaction ID or property..."
-          class="w-64"
+          class="w-64 search-input"
           :disabled="loadingPayments"
           @input="debouncedSearch"
         />
         <VaButton v-if="searchQuery" color="warning" size="small" @click="clearSearch">Clear Search</VaButton>
       </div>
-      <div class="flex items-center space-x-4">
+      <div class="flex items-center space-x-4 per-page-select-group">
         <VaSelect
           v-model="pagination.per_page"
           :options="perPageOptions"
@@ -47,7 +47,7 @@
           :options="statusOptions"
           :disabled="updatingStatus && updatingId === rowData.payment_id"
           @update:modelValue="updateStatus(rowData, $event)"
-          class="w-32"
+          class="w-32 status-select"
         />
       </template>
       <template #cell(payment_method)="{ rowData }">
@@ -60,11 +60,11 @@
         <VaButton size="small" color="primary" icon="visibility" @click="openPreview(rowData)" />
       </template>
     </VaDataTable>
-    <div v-if="payments && payments.length > 0" class="flex justify-between items-center mt-4">
-      <div>
+    <div v-if="payments && payments.length > 0" class="flex justify-between items-center mt-4 pagination-footer">
+      <div class="pagination-summary">
         Showing {{ pagination.from }} to {{ pagination.to }} of {{ pagination.total }} payments
       </div>
-      <div class="flex space-x-2">
+      <div class="flex space-x-2 pagination-controls">
         <VaButton
           size="small"
           :disabled="pagination.current_page === 1"
@@ -90,10 +90,10 @@
         </VaButton>
       </div>
     </div>
-    <VaModal v-model="showPreview" size="large" layout="centered" close-button hide-default-actions class="p-4">
+    <VaModal v-model="showPreview" size="large" layout="centered" close-button hide-default-actions class="p-4 payment-modal">
       <div v-if="selectedPayment" class="space-y-4">
         <h2 class="text-lg font-bold">Payment Details</h2>
-        <div class="border p-4 rounded bg-gray-50">
+        <div class="border p-4 rounded bg-gray-50 detail-panel">
           <p><strong>Amount:</strong> {{ selectedPayment.currency }} {{ selectedPayment.amount }}</p>
           <p><strong>Date:</strong> {{ selectedPayment.date || 'N/A' }}</p>
           <p><strong>Status:</strong> {{ selectedPayment.status || 'N/A' }}</p>
@@ -205,7 +205,7 @@ export default defineComponent({
       updatingId: null as number | null,
       searchQuery: '' as string,
       componentKey: 0,
-      statusOptions: ['pending', 'completed', 'failed', 'refunded'],
+      statusOptions: ['pending', 'completed', 'received', 'failed', 'refunded'],
       perPageOptions: [
         { value: 10, text: '10' },
         { value: 15, text: '15' },
@@ -452,26 +452,12 @@ export default defineComponent({
 <style scoped>
 .card {
   background-color: #ffffff;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   border-radius: 0.5rem;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
-  padding-top: 1.5rem;
-  padding-bottom: 1.5rem;
-
-  @media screen and (max-width: 768px) {
-    padding-left: 1rem;
-    padding-right: 1rem;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-  }
-
-  @media screen and (max-width: 480px) {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-  }
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .mb-4 {
@@ -484,6 +470,7 @@ export default defineComponent({
 
 .flex {
   display: flex;
+  flex-wrap: wrap;
 }
 
 .justify-between {
@@ -520,5 +507,152 @@ export default defineComponent({
 
 .bg-gray-50 {
   background-color: #f9fafb;
+}
+
+/* Data Table Specific Styling */
+:deep(.va-data-table) {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+:deep(.va-data-table__table) {
+  min-width: 100%;
+  table-layout: auto;
+}
+
+:deep(.va-data-table__table-th) {
+  white-space: nowrap;
+  font-size: 0.875rem;
+  padding: 0.75rem;
+}
+
+:deep(.va-data-table__table-td) {
+  font-size: 0.875rem;
+  padding: 0.75rem;
+  white-space: nowrap;
+}
+
+/* Modal Styling */
+:deep(.va-modal__inner) {
+  width: 100%;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* ------------------ */
+/* Responsive Updates */
+/* ------------------ */
+
+@media (max-width: 768px) {
+  .card {
+    padding: 1rem;
+  }
+  
+  /* Make the main header controls stack vertically */
+  .header-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Separate the two main header control groups */
+  .header-controls > div {
+    width: 100%;
+    margin-bottom: 0.75rem;
+  }
+
+  /* Search input group */
+  .search-group {
+    flex-wrap: nowrap;
+  }
+
+  .w-64.search-input {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .w-32 {
+    width: auto; 
+    max-width: 8rem;
+  }
+  
+  /* Update data table and button spacing */
+  .space-x-4 {
+    gap: 0.75rem;
+    margin-right: 0;
+  }
+  
+  .space-x-2 > :not(:last-child) {
+    margin-right: 0.25rem;
+  }
+
+  /* Pagination controls */
+  .pagination-footer {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .pagination-summary {
+    text-align: center;
+  }
+
+  .pagination-controls {
+    /* Allow pagination buttons to wrap if necessary */
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    justify-content: center;
+  }
+  
+  :deep(.va-data-table__table-th),
+  :deep(.va-data-table__table-td) {
+    font-size: 0.8125rem;
+    padding: 0.5rem;
+  }
+  
+  :deep(.va-modal__inner) {
+    max-width: 95vw;
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 0.5rem;
+  }
+  
+  :deep(.va-data-table__table-th),
+  :deep(.va-data-table__table-td) {
+    font-size: 0.75rem;
+    padding: 0.4rem;
+  }
+  
+  /* Corrected the overly large padding value for buttons and reduced size */
+  :deep(.va-button) {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.5rem;
+  }
+  
+  :deep(.va-select),
+  :deep(.va-input) {
+    font-size: 0.75rem;
+  }
+  
+  :deep(.va-modal__inner) {
+    max-width: 98vw;
+    padding: 0.5rem;
+  }
+
+  /* Stack items in the search group vertically */
+  .search-group {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .search-group > * {
+      margin-right: 0 !important;
+      margin-bottom: 0.5rem;
+  }
 }
 </style>

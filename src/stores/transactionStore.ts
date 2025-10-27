@@ -1,15 +1,34 @@
-import { defineStore } from 'pinia'
-import makeRequest from '../services/makeRequest'
-import { format } from 'date-fns'
-import Swal from 'sweetalert2'
+import { defineStore } from 'pinia';
+import makeRequest from '../services/makeRequest';
+import { format } from 'date-fns';
+import Swal from 'sweetalert2';
+
+// Define the Transaction interface
+interface Transaction {
+  id: number;
+  property_id: number | null;
+  property_title: string;
+  client_id: number | null;
+  client_name: string;
+  buyer_id: number | null;
+  buyer_fullname: string;
+  seller_id: number | null;
+  seller_fullname: string;
+  type: string;
+  amount: number | string;
+  transaction_date: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
 
 export const useTransactionStore = defineStore('transaction', {
   state: () => ({
     loadingTransactions: false,
-    transactions: [] as any[],
+    transactions: [] as Transaction[], // Use Transaction interface
     addingTransaction: false,
     editingTransaction: false,
-    addedTransaction: null as any,
+    addedTransaction: null as Transaction | null, // Use Transaction interface
     pagination: {
       total: 0,
       per_page: 10,
@@ -66,7 +85,7 @@ export const useTransactionStore = defineStore('transaction', {
             });
             return response;
           }
-          const newTransactions = response.data.data.map((transaction: any) => ({
+          const newTransactions: Transaction[] = response.data.data.map((transaction: any) => ({
             id: transaction.id,
             property_id: transaction.property_id || null,
             property_title: transaction.property_title || 'N/A',
@@ -92,7 +111,7 @@ export const useTransactionStore = defineStore('transaction', {
               : null,
           }));
           const uniqueTransactions = Array.from(
-            new Map(newTransactions.map((item) => [item.id, item])).values()
+            new Map(newTransactions.map((item: Transaction) => [item.id, item])).values()
           );
           this.transactions = uniqueTransactions;
           this.pagination = {

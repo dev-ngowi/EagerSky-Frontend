@@ -1,38 +1,57 @@
 <template>
   <div class="card">
     <h2 class="text-xl font-bold mb-4">Payment Methods</h2>
-    <div class="flex justify-between items-center mb-4">
-      <div class="flex items-center space-x-4">
+    
+    <div class="controls-wrapper">
+      
+      <div class="search-group">
         <VaInput
           v-model="searchQuery"
-          placeholder="Search by payment method name..."
-          class="w-64"
+          placeholder="Search by name..."
+          class="va-input-full-width"
           :disabled="loadingMethods"
           @update:modelValue="handleSearchInput"
         />
-        <VaButton v-if="searchQuery" color="warning" size="small" @click="clearSearch">Clear Search</VaButton>
+        <VaButton 
+          v-if="searchQuery" 
+          color="warning" 
+          size="small" 
+          @click="clearSearch"
+          class="clear-search-btn"
+        >
+          Clear
+        </VaButton>
       </div>
-      <div class="flex items-center space-x-4">
+
+      <div class="actions-group">
         <VaSelect
           v-model="pagination.per_page"
           :options="perPageOptions"
-          label="Items per page"
+          label="Per page"
           value-by="value"
           text-by="text"
-          class="w-32"
+          class="va-select-per-page"
           @update:modelValue="handlePerPageChange"
         />
+        
         <VaButton
           v-if="!addEditForm"
           icon="add"
           color="#00A3E0"
           size="small"
-          class="px-4"
+          class="add-button"
           @click="openForm(null, 'add')"
         >
           Add
         </VaButton>
-        <VaButton v-if="addEditForm" icon="close" color="success" size="small" class="px-4" @click="cancelAdding">
+        <VaButton 
+          v-if="addEditForm" 
+          icon="close" 
+          color="success" 
+          size="small" 
+          class="done-button" 
+          @click="cancelAdding"
+        >
           Done
         </VaButton>
       </div>
@@ -48,21 +67,25 @@
         striped
         :columns="columns"
         :loading="loadingMethods"
+        class="responsive-data-table"
       >
         <template #cell(sn)="{ rowIndex }">
           {{ (pagination.current_page - 1) * pagination.per_page + rowIndex + 1 }}
         </template>
         <template #cell(actions)="{ rowData }">
-          <VaButton size="small" color="primary" icon="visibility" @click="openView(rowData)" />
-          <VaButton size="small" color="warning" icon="edit" class="ml-2" @click="openForm(rowData, 'edit')" />
-          <VaButton size="small" color="danger" icon="delete" class="ml-2" @click="confirmDelete(rowData)" />
+          <div class="flex-nowrap">
+            <VaButton size="small" color="primary" icon="visibility" @click="openView(rowData)" title="View" />
+            <VaButton size="small" color="warning" icon="edit" class="ml-2" @click="openForm(rowData, 'edit')" title="Edit" />
+            <VaButton size="small" color="danger" icon="delete" class="ml-2" @click="confirmDelete(rowData)" title="Delete" />
+          </div>
         </template>
       </VaDataTable>
-      <div v-if="methods && methods.length > 0" class="flex justify-between items-center mt-4">
-        <div>
-          Showing {{ pagination.from }} to {{ pagination.to }} of {{ pagination.total }} payment methods
+      
+      <div v-if="methods && methods.length > 0" class="pagination-wrapper">
+        <div class="pagination-summary">
+          Showing {{ pagination.from }} to {{ pagination.to }} of {{ pagination.total }} methods
         </div>
-        <div class="flex space-x-2">
+        <div class="pagination-controls">
           <VaButton
             size="small"
             :disabled="pagination.current_page === 1"
@@ -89,6 +112,7 @@
         </div>
       </div>
     </template>
+    
     <template v-else>
       <div class="p-4">
         <h2 class="text-xl font-bold mb-4">{{ formMode === 'add' ? 'Add New Payment Method' : 'Edit Payment Method' }}</h2>
@@ -116,6 +140,7 @@
         </form>
       </div>
     </template>
+    
     <VaModal v-model="showView" size="medium" layout="centered" close-button hide-default-actions class="p-4">
       <div class="text-lg font-bold mb-4">Payment Method Details</div>
       <div v-if="selectedMethod" class="space-y-2">
@@ -131,6 +156,8 @@
 </template>
 
 <script lang="ts">
+// Script section is unchanged as responsiveness is primarily a concern of the template and styles.
+// ... (The entire script block from your original code is here) ...
 import { defineComponent, reactive, ref, computed } from 'vue';
 import Swal from 'sweetalert2';
 import { debounce } from 'lodash';
@@ -588,29 +615,132 @@ export default defineComponent({
   background-color: #ffffff;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   border-radius: 0.5rem;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
-  padding-top: 1.5rem;
-  padding-bottom: 1.5rem;
+  padding: 1.5rem; /* Default padding for desktop */
 }
 
+/* --- Responsive Controls and Layout --- */
+
+.controls-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.search-group, .actions-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.va-input-full-width {
+  width: 16rem; /* Default desktop width */
+}
+
+.va-select-per-page {
+  width: 8rem; /* Default desktop width */
+}
+
+/* Pagination Wrapper for responsiveness */
+.pagination-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.pagination-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap; /* Allows buttons to wrap on smaller screens */
+}
+
+/* Mobile: < 768px */
 @media screen and (max-width: 768px) {
   .card {
-    padding-left: 1rem;
-    padding-right: 1rem;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
+    padding: 1rem;
+  }
+
+  /* Stack controls vertically on mobile */
+  .controls-wrapper {
+    flex-direction: column;
+    align-items: stretch; /* Stretch items to full width */
+    gap: 1rem;
+  }
+
+  .search-group {
+    width: 100%;
+    /* Keep search and clear in a row */
+    justify-content: flex-start; 
+    gap: 0.5rem; /* tighter spacing for mobile */
+  }
+
+  .va-input-full-width {
+    width: 100%; /* Search input takes up available width */
+    flex-grow: 1;
+  }
+  
+  .clear-search-btn {
+      /* Ensure button doesn't take up too much space */
+      white-space: nowrap; 
+      flex-shrink: 0;
+  }
+
+  .actions-group {
+    width: 100%;
+    /* Distribute space between per page and action buttons */
+    justify-content: space-between; 
+    gap: 0.5rem;
+  }
+
+  .va-select-per-page {
+    width: 6rem; /* Smaller width for select */
+    flex-shrink: 0;
+  }
+  
+  .add-button, .done-button {
+      flex-grow: 1;
+      text-align: center;
+  }
+
+  /* Data Table Responsiveness: Force horizontal scroll for smaller screens */
+  .responsive-data-table {
+      overflow-x: auto;
+  }
+
+  /* Pagination: Stack summary and controls on mobile */
+  .pagination-wrapper {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .pagination-summary {
+      font-size: 0.875rem; /* Smaller font size for summary */
   }
 }
 
+/* Extra Small Mobile: < 480px */
 @media screen and (max-width: 480px) {
-  .card {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-  }
+    .card {
+        padding: 0.5rem;
+    }
+    
+    .search-group {
+        /* If both search and clear still don't fit well, 
+           you might make the search input slightly smaller or 
+           remove the 'Clear' text and just keep the icon, but this 
+           current setup should be fine. */
+    }
+
+    .actions-group {
+        /* The justify-between makes the select on the left and 
+           action button on the right, which is good for small screens. */
+    }
 }
+
+
+/* --- Original Styles (Kept for completeness) --- */
 
 .mb-4 {
   margin-bottom: 1rem;
@@ -620,33 +750,19 @@ export default defineComponent({
   margin-top: 1rem;
 }
 
-.flex {
-  display: flex;
-}
-
-.justify-between {
-  justify-content: space-between;
-}
-
-.items-center {
-  align-items: center;
-}
+/* The original 'flex', 'justify-between', 'items-center', etc. 
+   are now contained within the new specific classes like 
+   .controls-wrapper, .search-group, .actions-group, and 
+   .pagination-wrapper. */
 
 .space-x-2 > :not(:last-child) {
   margin-right: 0.5rem;
 }
 
-.space-x-4 > :not(:last-child) {
-  margin-right: 1rem;
-}
+/* Replaced .space-x-4 with .search-group and .actions-group gap: 1rem */
 
-.w-32 {
-  width: 8rem;
-}
-
-.w-64 {
-  width: 16rem;
-}
+/* Replaced .w-32, .w-64 with .va-select-per-page and .va-input-full-width 
+   and used media queries to override for responsiveness. */
 
 .border {
   border: 1px solid #e5e7eb;

@@ -1,47 +1,49 @@
 <template>
-  <div class="p-6 bg-white shadow-md rounded-lg">
-    <h2 class="text-2xl font-bold mb-6 text-gray-800">Manage Images for {{ propertyTitle }}</h2>
+  <div class="form-container">
+    <h2 class="form-title">Manage Images for {{ propertyTitle }}</h2>
     
-    <form @submit.prevent="submitForm">
+    <form @submit.prevent="submitForm" class="image-form">
       <!-- Property Title -->
-      <div class="mb-6">
+      <div class="form-field">
         <VaInput
           v-model="propertyTitle"
           label="Property"
           :disabled="true"
-          class="w-full"
+          class="form-input"
+          aria-label="Property title (read-only)"
         />
       </div>
       <!-- Current Images -->
-      <div class="mb-6">
-        <p class="text-lg font-medium text-gray-700 mb-2">
+      <div class="form-field">
+        <p class="section-title">
           Current Images ({{ currentImages.length }}/{{ requirements.max_images_per_property }})
         </p>
-        <div v-if="currentImages.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        <div v-if="currentImages.length" class="image-grid">
           <div
             v-for="(img, index) in currentImages"
             :key="img.id"
-            class="relative p-2 bg-gray-50 rounded-lg border"
+            class="image-item"
             :class="{ 'border-blue-500': replaceImageId === img.id, 'border-red-500': imagesToDelete.includes(img.id) }"
           >
             <img
               :src="getImageUrl(img.file_path)"
               :alt="img.caption || `Image ${index + 1}`"
-              class="h-32 w-full object-cover rounded"
+              class="image-preview"
               @error="handleImageError($event, img)"
             />
-            <div class="mt-2 flex items-center space-x-2">
-              <label class="flex items-center text-sm text-gray-600 cursor-pointer">
+            <div class="image-actions">
+              <label class="action-label">
                 <input
                   type="checkbox"
                   v-model="imagesToDelete"
                   :value="img.id"
                   :disabled="isSubmitting"
-                  class="mr-1"
+                  class="action-checkbox"
+                  :aria-label="`Delete image ${index + 1}`"
                 />
                 Delete
               </label>
-              <label class="flex items-center text-sm text-gray-600 cursor-pointer">
+              <label class="action-label">
                 <input
                   type="radio"
                   name="replace"
@@ -49,7 +51,8 @@
                   :checked="replaceImageId === img.id"
                   :disabled="isSubmitting"
                   @change="selectImageToReplace(img)"
-                  class="mr-1"
+                  class="action-radio"
+                  :aria-label="`Replace image ${index + 1}`"
                 />
                 Replace
               </label>
@@ -57,19 +60,20 @@
             <VaInput
               v-model="img.caption"
               label="Caption"
-              class="mt-2"
+              class="form-input caption-input"
               :disabled="isSubmitting"
               :maxlength="requirements.caption_max_length"
               :error-messages="errors[`caption_${img.id}`] ? [errors[`caption_${img.id}`]] : []"
               @update:modelValue="updateImageCaption(img)"
+              :aria-label="`Edit caption for image ${index + 1}`"
             />
           </div>
         </div>
-        <p v-else class="text-gray-500 text-sm">No images for this property.</p>
+        <p v-else class="no-images-text">No images for this property.</p>
       </div>
       <!-- New/Replace Images -->
-      <div class="mb-6">
-        <label class="block text-sm font-medium text-gray-700 mb-2">
+      <div class="form-field">
+        <label class="file-label">
           {{ replaceImageId ? `Replace Image (ID: ${replaceImageId})` : 'Add New Images' }}
         </label>
         <input
@@ -78,14 +82,15 @@
           :multiple="!replaceImageId"
           :accept="requirements.allowed_formats.map((fmt) => `image/${fmt}`).join(',')"
           :disabled="isSubmitting || (!replaceImageId && currentImages.length >= requirements.max_images_per_property)"
-          class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          class="file-input"
           @change="handleFileChange"
+          :aria-label="replaceImageId ? `Replace image with ID ${replaceImageId}` : 'Add new images'"
         />
-        <p v-if="errors.images" class="text-red-500 text-sm mt-1">{{ errors.images }}</p>
-        <p v-if="!replaceImageId && currentImages.length >= requirements.max_images_per_property" class="text-red-500 text-sm mt-1">
+        <p v-if="errors.images" class="error-text">{{ errors.images }}</p>
+        <p v-if="!replaceImageId && currentImages.length >= requirements.max_images_per_property" class="error-text">
           Maximum number of images reached. To add a new one, please delete or replace an existing image.
         </p>
-        <div v-if="!replaceImageId" class="mt-4">
+        <div v-if="!replaceImageId" class="form-field">
           <VaInput
             v-model="newImageCaption"
             label="Caption for New Images"
@@ -93,22 +98,24 @@
             :disabled="isSubmitting"
             :maxlength="requirements.caption_max_length"
             :error-messages="errors.newImageCaption ? [errors.newImageCaption] : []"
-            class="w-full"
+            class="form-input"
+            aria-label="Enter caption for new images"
           />
         </div>
-        <div v-if="imagePreviews.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
-          <div v-for="(preview, index) in imagePreviews" :key="index" class="relative p-2 bg-gray-50 rounded-lg border">
+        <div v-if="imagePreviews.length" class="preview-grid">
+          <div v-for="(preview, index) in imagePreviews" :key="index" class="preview-item">
             <img
               :src="preview.url"
               :alt="`Preview ${index + 1}`"
-              class="h-32 w-full object-cover rounded"
+              class="preview-image"
             />
             <button
               type="button"
-              class="absolute top-1 right-1 text-red-500 hover:text-red-700"
+              class="remove-button"
               @click="removePreview(index)"
+              :aria-label="`Remove image preview ${index + 1}`"
             >
-              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="remove-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -116,12 +123,22 @@
         </div>
       </div>
       <!-- Form Actions -->
-      <div class="flex justify-end space-x-3 mt-6">
-        <VaButton color="secondary" :disabled="isSubmitting" @click="$emit('close')">Cancel</VaButton>
+      <div class="form-actions">
+        <VaButton
+          color="secondary"
+          :disabled="isSubmitting"
+          @click="$emit('close')"
+          class="cancel-button"
+          aria-label="Cancel image editing"
+        >
+          Cancel
+        </VaButton>
         <VaButton
           color="#00A3E0"
           type="submit"
           :disabled="isSubmitting || (!imagePreviews.length && !imagesToDelete.length && !updatedCaptions.length)"
+          class="submit-button"
+          aria-label="Save image changes"
         >
           <div v-if="isSubmitting" class="spinner" />
           <span v-else>Save Changes</span>
@@ -405,7 +422,7 @@ export default defineComponent({
         }
       }
     },
-    handleFileChange(event: Event) {
+    async handleFileChange(event: Event) {
       this.errors.images = '';
       const input = event.target as HTMLInputElement;
       if (!input.files || !input.files.length) {
@@ -415,36 +432,53 @@ export default defineComponent({
         this.imagePreviews = [];
         return;
       }
-      const maxSize = 10 * 1024 * 1024;
+
+      const maxSizePerFile = 10 * 1024 * 1024; // 10MB per file
+      const maxTotalSize = 15 * 1024 * 1024; // 15MB total payload
       const allowedTypes = this.requirements.allowed_formats.map(fmt => `image/${fmt}`);
       const allowedExtensions = this.requirements.allowed_formats;
       const newImageCount = input.files.length;
       const totalImages = this.currentImages.length + newImageCount - (this.replaceImageId ? 1 : this.imagesToDelete.length);
+      let totalSize = 0;
+
       if (this.replaceImageId && newImageCount > 1) {
         this.errors.images = 'Only one image can be selected for replacement.';
         this.imagePreviews = [];
         return;
       }
+
       if (!this.replaceImageId && totalImages > this.requirements.max_images_per_property) {
         this.errors.images = `Cannot add ${newImageCount} image(s). Maximum of ${this.requirements.max_images_per_property} images per property.`;
         this.imagePreviews = [];
         return;
       }
+
       const previews: ImagePreview[] = [];
       for (const file of Array.from(input.files)) {
         const extension = file.name.split('.').pop()?.toLowerCase() || '';
+        totalSize += file.size;
+
         if (!allowedTypes.includes(file.type) || !allowedExtensions.includes(extension)) {
           this.errors.images = `Only ${allowedExtensions.join(', ')} files are allowed.`;
           this.imagePreviews = [];
           return;
         }
-        if (file.size > maxSize) {
+
+        if (file.size > maxSizePerFile) {
           this.errors.images = 'Each image must not exceed 10MB.';
           this.imagePreviews = [];
           return;
         }
+
         previews.push({ url: URL.createObjectURL(file), file });
       }
+
+      if (!this.replaceImageId && totalSize > maxTotalSize) {
+        this.errors.images = 'Total size of images exceeds 15MB. Please select smaller files or fewer images.';
+        this.imagePreviews = [];
+        return;
+      }
+
       this.imagePreviews = previews;
     },
     removePreview(index: number) {
@@ -459,14 +493,17 @@ export default defineComponent({
       this.updatedCaptions.forEach(({ id }) => {
         this.errors[`caption_${id}`] = '';
       });
+
       if (!this.imagePreviews.length && !this.imagesToDelete.length && !this.updatedCaptions.length) {
         this.errors.images = 'Please select images to add, replace, delete, or update captions.';
         return;
       }
+
       if (this.newImageCaption && this.newImageCaption.length > this.requirements.caption_max_length) {
         this.errors.newImageCaption = `Caption must not exceed ${this.requirements.caption_max_length} characters`;
         return;
       }
+
       if (this.updatedCaptions.some(({ caption }) => caption && caption.length > this.requirements.caption_max_length)) {
         this.updatedCaptions.forEach(({ id, caption }) => {
           if (caption && caption.length > this.requirements.caption_max_length) {
@@ -475,17 +512,21 @@ export default defineComponent({
         });
         return;
       }
+
       if (!this.authStore.isAuthenticated || !AuthMiddleware.isSessionValid()) {
         this.handleError('You are not logged in. Please log in and try again.', true);
         return;
       }
+
       this.isSubmitting = true;
       try {
         const userProfile = this.authStore.userProfile;
         if (!userProfile?.id) {
           throw new Error('User profile not found. Please log in again.');
         }
+
         console.log('Submitting form with user_id:', userProfile.id);
+
         // Handle Deletions
         if (this.imagesToDelete.length) {
           const response = await makeRequest({
@@ -499,6 +540,7 @@ export default defineComponent({
             this.imagesToDelete = [];
           }
         }
+
         // Handle Caption Updates
         if (this.updatedCaptions.length) {
           const response = await makeRequest({
@@ -515,16 +557,17 @@ export default defineComponent({
             this.updatedCaptions = [];
           }
         }
+
         // Handle Replacements or Additions
         if (this.imagePreviews.length) {
-          const formData = new FormData();
-          formData.append('property_id', String(this.propertyId));
-          formData.append('user_id', String(userProfile.id));
           if (this.replaceImageId) {
             const file = this.imagePreviews[0]?.file;
             if (!file || !(file instanceof File)) {
               throw new Error('No valid image selected for replacement.');
             }
+            const formData = new FormData();
+            formData.append('property_id', String(this.propertyId));
+            formData.append('user_id', String(userProfile.id));
             formData.append('image', file);
             const existingImage = this.currentImages.find(img => img.id === this.replaceImageId);
             if (existingImage?.caption) {
@@ -548,7 +591,7 @@ export default defineComponent({
                       uploader: updatedImage.uploader || 'EagerSky',
                       created_at: updatedImage.created_at ? format(new Date(updatedImage.created_at), 'd MMMM yyyy') : 'None',
                       updated_at: updatedImage.updated_at ? format(new Date(updatedImage.updated_at), 'd MMMM yyyy') : 'None',
-                      user_id: updatedImage.user_id ? String(updatedImage.user_id) : undefined, // Changed to string
+                      user_id: updatedImage.user_id ? String(updatedImage.user_id) : undefined,
                     }
                   : img
               );
@@ -556,35 +599,104 @@ export default defineComponent({
               this.imagePreviews = [];
             }
           } else {
-            this.imagePreviews.forEach((preview, index) => {
-              formData.append('images[]', preview.file);
-              formData.append('captions[]', this.newImageCaption || '');
-            });
-            const response = await makeRequest({
-              url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/images`,
-              method: 'post',
-              data: formData,
-              requiresAuth: true,
-            });
-            if (response.status === 201) {
-              const newImages = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
-              this.currentImages.push(
-                ...newImages.map((image: any) => ({
-                  id: image.id,
-                  property_id: image.property_id,
-                  file_path: image.file_path,
-                  caption: image.caption || null,
-                  uploader: image.uploader || 'EagerSky',
-                  created_at: image.created_at ? format(new Date(image.created_at), 'd MMMM yyyy') : 'None',
-                  updated_at: image.updated_at ? format(new Date(image.updated_at), 'd MMMM yyyy') : 'None',
-                  user_id: image.user_id ? String(image.user_id) : undefined, // Changed to string
-                }))
-              );
-              this.imagePreviews = [];
-              this.newImageCaption = '';
+            // Handle Additions
+            for (const [index, preview] of this.imagePreviews.entries()) {
+              const file = preview.file;
+              if (file.size <= 2 * 1024 * 1024) {
+                // Use /v1/images for small files
+                console.log(`Uploading small file ${file.name} directly via /v1/images`);
+                const formData = new FormData();
+                formData.append('images[]', file, file.name);
+                formData.append('captions[]', this.newImageCaption || '');
+                formData.append('property_id', String(this.propertyId));
+                formData.append('user_id', String(userProfile.id));
+                const response = await makeRequest({
+                  url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/images`,
+                  method: 'post',
+                  data: formData,
+                  requiresAuth: true,
+                });
+                if (response.status === 201) {
+                  const newImage = Array.isArray(response.data.data) ? response.data.data[0] : response.data.data;
+                  this.currentImages.push({
+                    id: newImage.id,
+                    property_id: newImage.property_id,
+                    file_path: newImage.file_path,
+                    caption: newImage.caption || null,
+                    uploader: newImage.uploader || 'EagerSky',
+                    created_at: newImage.created_at ? format(new Date(newImage.created_at), 'd MMMM yyyy') : 'None',
+                    updated_at: newImage.updated_at ? format(new Date(newImage.updated_at), 'd MMMM yyyy') : 'None',
+                    user_id: newImage.user_id ? String(newImage.user_id) : undefined,
+                  });
+                }
+              } else {
+                // Chunked upload for larger files
+                const chunkSize = 2 * 1024 * 1024; // 2MB chunks
+                const totalChunks = Math.ceil(file.size / chunkSize);
+                const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+                const filename = `${Date.now()}_testimonials-${index + 1}.${extension}`;
+                const maxRetries = 3;
+
+                for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+                  let attempt = 1;
+                  let success = false;
+                  const start = chunkIndex * chunkSize;
+                  const end = Math.min(start + chunkSize, file.size);
+                  const chunk = new Blob([file.slice(start, end)], { type: file.type }); // Explicitly set MIME type
+
+                  while (attempt <= maxRetries && !success) {
+                    console.log(`Uploading chunk ${chunkIndex + 1}/${totalChunks} for ${filename} (attempt ${attempt})`);
+                    const formData = new FormData();
+                    formData.append('chunk', chunk, `chunk_${chunkIndex}.${extension}`);
+                    formData.append('chunk_index', String(chunkIndex));
+                    formData.append('total_chunks', String(totalChunks));
+                    formData.append('filename', filename);
+                    formData.append('property_id', String(this.propertyId));
+                    formData.append('user_id', String(userProfile.id));
+                    formData.append('caption', this.newImageCaption || '');
+
+                    try {
+                      const response = await makeRequest({
+                        url: `${import.meta.env.VITE_APP_API_BASE_URL}/v1/images/chunk`,
+                        method: 'post',
+                        data: formData,
+                        requiresAuth: true,
+                      });
+                      console.log(`Chunk ${chunkIndex + 1} response:`, response);
+
+                      if (response.status === 200 || response.status === 201) {
+                        success = true;
+                        if (response.status === 201) {
+                          const newImage = response.data.data;
+                          this.currentImages.push({
+                            id: newImage.id,
+                            property_id: newImage.property_id,
+                            file_path: newImage.file_path,
+                            caption: newImage.caption || null,
+                            uploader: newImage.uploader || 'EagerSky',
+                            created_at: newImage.created_at ? format(new Date(newImage.created_at), 'd MMMM yyyy') : 'None',
+                            updated_at: newImage.updated_at ? format(new Date(newImage.updated_at), 'd MMMM yyyy') : 'None',
+                            user_id: newImage.user_id ? String(newImage.user_id) : undefined,
+                          });
+                        }
+                      }
+                    } catch (error: any) {
+                      console.error(`Chunk ${chunkIndex + 1} upload failed (attempt ${attempt}):`, error.response?.data || error.message);
+                      if (attempt === maxRetries) {
+                        throw new Error(`Failed to upload chunk ${chunkIndex + 1} for ${filename} after ${maxRetries} attempts: ${error.response?.data?.message || error.message}`);
+                      }
+                      await new Promise(resolve => setTimeout(resolve, 1000));
+                      attempt++;
+                    }
+                  }
+                }
+              }
             }
+            this.imagePreviews = [];
+            this.newImageCaption = '';
           }
         }
+
         Swal.fire({
           title: 'Success!',
           text: 'Images have been updated successfully.',
@@ -597,15 +709,20 @@ export default defineComponent({
         this.$emit('submit');
         this.$emit('close');
       } catch (error: any) {
-        const errorMessage = error.response?.status === 401
-          ? 'Your session has expired or the token is invalid. Please log in again.'
-          : error.response?.status === 422 && error.response?.data?.errors
-            ? Object.entries(error.response.data.errors)
-                .map(([key, value]) => [key === 'images.0' ? 'images' : key, Array.isArray(value) ? value[0] : value])
-                .filter(Boolean)
-                .join('; ')
-            : error.message || 'Failed to process images.';
+        const errorMessage = error.response?.status === 413
+          ? 'The uploaded data is too large. Please try uploading smaller images or contact support.'
+          : error.response?.status === 401
+            ? 'Your session has expired or the token is invalid. Please log in again.'
+            : error.response?.status === 422 && error.response?.data?.errors
+              ? Object.entries(error.response.data.errors)
+                  .map(([key, value]) => [key === 'chunk' ? 'images' : key, Array.isArray(value) ? value[0] : value])
+                  .filter(Boolean)
+                  .join('; ')
+              : error.response?.data?.message || error.message || 'Failed to process images.';
+        console.error('Submission error:', error.response?.data || error.message);
         this.handleError(errorMessage, error.response?.status === 401 || error.message.includes('User profile not found'));
+        this.imagePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
+        this.imagePreviews = [];
       } finally {
         this.isSubmitting = false;
         if (this.fileInput) {
@@ -615,77 +732,277 @@ export default defineComponent({
     },
   },
 });
-
 </script>
 
-<style scoped>
-/* Container */
-.bg-white { background-color: #ffffff; }
-.shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
-.rounded-lg { border-radius: 0.5rem; }
-.p-4 { padding: 1rem; }
-.sm\:p-6 { @media (min-width: 640px) { padding: 1.5rem; } }
-.max-w-full { max-width: 100%; }
-.overflow-x-auto { overflow-x: auto; }
+<style lang="scss" scoped>
+.form-container {
+  background-color: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  max-width: 100%;
+  overflow-x: auto;
 
-/* Typography */
-.text-xl { font-size: 1.25rem; }
-.sm\:text-2xl { @media (min-width: 640px) { font-size: 1.5rem; } }
-.text-base { font-size: 1rem; }
-.sm\:text-lg { @media (min-width: 640px) { font-size: 1.125rem; } }
-.font-bold { font-weight: 700; }
-.font-medium { font-weight: 500; }
-.text-gray-800 { color: #1f2937; }
-.text-gray-700 { color: #374151; }
-.text-gray-600 { color: #4b5563; }
-.text-gray-500 { color: #6b7280; }
-.text-red-500 { color: #ef4444; }
+  @media screen and (min-width: 768px) {
+    padding: 1rem;
+  }
+}
 
-/* Grid */
-.grid { display: grid; }
-.grid-cols-1 { grid-template-columns: repeat(1, 1fr); }
-.sm\:grid-cols-2 { @media (min-width: 640px) { grid-template-columns: repeat(2, 1fr); } }
-.md\:grid-cols-3 { @media (min-width: 768px) { grid-template-columns: repeat(3, 1fr); } }
-.lg\:grid-cols-4 { @media (min-width: 1024px) { grid-template-columns: repeat(4, 1fr); } }
-.gap-3 { gap: 0.75rem; }
-.sm\:gap-4 { @media (min-width: 640px) { gap: 1rem; } }
+.form-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: #374151;
 
-/* Image Container */
-.relative { position: relative; }
-.p-2 { padding: 0.5rem; }
-.bg-gray-50 { background-color: #f9fafb; }
-.rounded { border-radius: 0.25rem; }
-.border { border-width: 1px; border-color: #e5e7eb; }
-.border-blue-500 { border-color: #3b82f6; }
-.border-red-500 { border-color: #ef4444; }
-.min-w-0 { min-width: 0; }
+  @media screen and (min-width: 768px) {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
+}
 
-/* Images */
-.max-h-32 { max-height: 8rem; }
-.w-full { width: 100%; }
-.object-cover { object-fit: cover; }
-.aspect-square { aspect-ratio: 1 / 1; }
+.image-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 
-/* Spacing */
-.mb-4 { margin-bottom: 1rem; }
-.sm\:mb-6 { @media (min-width: 640px) { margin-bottom: 1.5rem; } }
-.mt-2 { margin-top: 0.5rem; }
-.mt-4 { margin-bottom: 1rem; }
-.mb-2 { margin-bottom: 0.5rem; }
-.space-x-2 > :not(:last-child) { margin-right: 0.5rem; }
-.space-x-3 > :not(:last-child) { margin-right: 0.75rem; }
+  @media screen and (min-width: 768px) {
+    gap: 0.75rem;
+  }
+}
 
-/* Delete Button */
-.absolute { position: absolute; }
-.top-1 { top: 0.25rem; }
-.right-1 { right: 0.25rem; }
-.z-10 { z-index: 10; }
-.text-red-500 { color: #ef4444; }
-.hover\:text-red-700:hover { color: #b91c1c; }
-.h-5 { height: 1.25rem; }
-.w-5 { width: 1.25rem; }
+.form-field {
+  width: 100%;
+}
 
-/* Spinner */
+.section-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+  }
+}
+
+.image-grid,
+.preview-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  @media screen and (min-width: 1024px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.image-item,
+.preview-item {
+  position: relative;
+  padding: 0.5rem;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  min-width: 0;
+}
+
+.image-preview,
+.preview-image {
+  max-height: 8rem;
+  width: 100%;
+  object-fit: cover;
+  border-radius: 0.25rem;
+}
+
+.image-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+}
+
+.action-label {
+  display: flex;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #4b5563;
+  cursor: pointer;
+
+  @media screen and (min-width: 768px) {
+    font-size: 0.875rem;
+  }
+}
+
+.action-checkbox,
+.action-radio {
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.25rem;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.form-input,
+.caption-input {
+  font-size: 0.875rem;
+
+  :deep(.va-input__label) {
+    font-size: 0.875rem;
+    color: #374151;
+    margin-bottom: 0.25rem;
+  }
+
+  :deep(.va-input__input) {
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+  }
+
+  :deep(.va-input__error-message) {
+    font-size: 0.75rem;
+    color: #ef4444;
+    margin-top: 0.25rem;
+  }
+
+  @media screen and (min-width: 768px) {
+    font-size: 1rem;
+
+    :deep(.va-input__label) {
+      font-size: 1rem;
+    }
+
+    :deep(.va-input__input) {
+      padding: 0.75rem;
+    }
+
+    :deep(.va-input__error-message) {
+      font-size: 0.875rem;
+    }
+  }
+}
+
+.file-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.25rem;
+
+  @media screen and (min-width: 768px) {
+    font-size: 1rem;
+  }
+}
+
+.file-input {
+  width: 100%;
+  font-size: 0.75rem;
+  color: #4b5563;
+
+  &::file-selector-button {
+    margin-right: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.25rem;
+    background-color: #e0f2fe;
+    color: #1e40af;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+
+    &:hover {
+      background-color: #bfdbfe;
+    }
+  }
+
+  @media screen and (min-width: 768px) {
+    font-size: 0.875rem;
+
+    &::file-selector-button {
+      font-size: 0.875rem;
+    }
+  }
+}
+
+.error-text,
+.no-images-text {
+  font-size: 0.75rem;
+  color: #ef4444;
+  margin-top: 0.25rem;
+
+  @media screen and (min-width: 768px) {
+    font-size: 0.875rem;
+  }
+}
+
+.no-images-text {
+  color: #6b7280;
+}
+
+.remove-button {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  color: #ef4444;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+
+  &:hover {
+    color: #b91c1c;
+  }
+}
+
+.remove-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+
+  @media screen and (min-width: 768px) {
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+}
+
+.cancel-button,
+.submit-button {
+  min-height: 40px;
+  min-width: 40px;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+
+  @media screen and (min-width: 768px) {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+  }
+}
+
+.submit-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .spinner {
   width: 1rem;
   height: 1rem;
@@ -694,9 +1011,238 @@ export default defineComponent({
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-right: 0.5rem;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
 
-/* Inputs */
-.cursor-pointer { cursor: pointer; }
+  @media screen and (min-width: 768px) {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.border-blue-500 {
+  border-color: #3b82f6;
+}
+
+.border-red-500 {
+  border-color: #ef4444;
+}
+
+@media (max-width: 640px) {
+  .form-container {
+    padding: 0.5rem;
+  }
+
+  .form-title {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .image-form {
+    gap: 0.25rem;
+  }
+
+  .section-title {
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .image-grid,
+  .preview-grid {
+    gap: 0.25rem;
+  }
+
+  .image-item,
+  .preview-item {
+    padding: 0.25rem;
+  }
+
+  .image-preview,
+  .preview-image {
+    max-height: 6rem;
+  }
+
+  .image-actions {
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+  }
+
+  .action-label {
+    font-size: 0.625rem;
+  }
+
+  .action-checkbox,
+  .action-radio {
+    width: 0.875rem;
+    height: 0.875rem;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .form-input,
+  .caption-input {
+    font-size: 0.75rem;
+
+    :deep(.va-input__label) {
+      font-size: 0.75rem;
+    }
+
+    :deep(.va-input__input) {
+      padding: 0.375rem;
+    }
+
+    :deep(.va-input__error-message) {
+      font-size: 0.625rem;
+    }
+  }
+
+  .file-label {
+    font-size: 0.75rem;
+  }
+
+  .file-input {
+    font-size: 0.625rem;
+
+    &::file-selector-button {
+      padding: 0.375rem 0.75rem;
+      font-size: 0.625rem;
+    }
+  }
+
+  .error-text,
+  .no-images-text {
+    font-size: 0.625rem;
+  }
+
+  .remove-icon {
+    width: 1rem;
+    height: 1rem;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .form-actions {
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+  }
+
+  .cancel-button,
+  .submit-button {
+    font-size: 0.625rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .spinner {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-container {
+    padding: 0.25rem;
+  }
+
+  .form-title {
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .section-title {
+    font-size: 0.625rem;
+  }
+
+  .image-grid,
+  .preview-grid {
+    gap: 0.125rem;
+  }
+
+  .image-item,
+  .preview-item {
+    padding: 0.125rem;
+  }
+
+  .image-preview,
+  .preview-image {
+    max-height: 5rem;
+  }
+
+  .image-actions {
+    gap: 0.125rem;
+  }
+
+  .action-label {
+    font-size: 0.5rem;
+  }
+
+  .action-checkbox,
+  .action-radio {
+    width: 0.75rem;
+    height: 0.75rem;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .form-input,
+  .caption-input {
+    font-size: 0.625rem;
+
+    :deep(.va-input__label) {
+      font-size: 0.625rem;
+    }
+
+    :deep(.va-input__input) {
+      padding: 0.25rem;
+    }
+
+    :deep(.va-input__error-message) {
+      font-size: 0.5rem;
+    }
+  }
+
+  .file-label {
+    font-size: 0.625rem;
+  }
+
+  .file-input {
+    font-size: 0.5rem;
+
+    &::file-selector-button {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.5rem;
+    }
+  }
+
+  .error-text,
+  .no-images-text {
+    font-size: 0.5rem;
+  }
+
+  .remove-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .form-actions {
+    gap: 0.125rem;
+    margin-top: 0.25rem;
+  }
+
+  .cancel-button,
+  .submit-button {
+    font-size: 0.5rem;
+    padding: 0.2rem 0.4rem;
+  }
+
+  .spinner {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+}
 </style>

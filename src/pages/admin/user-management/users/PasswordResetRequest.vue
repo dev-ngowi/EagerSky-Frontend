@@ -32,6 +32,7 @@ import { mapActions } from 'pinia'
 import { useUserStore } from '../../../../stores/userStore'
 import Swal from 'sweetalert2'
 import { FormData, Errors } from '../../../../types/password-request'
+import type { VueI18n } from 'vue-i18n'
 
 export default defineComponent({
   name: 'PasswordResetRequest',
@@ -53,8 +54,8 @@ export default defineComponent({
       this.errors = { email: '' }
 
       // Client-side validation
-      if (!this.form.email) this.errors.email = 'Email is required'
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.form.email)) this.errors.email = 'Invalid email format'
+      if (!this.form.email) this.errors.email = this.$t('Email is required')
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.form.email)) this.errors.email = this.$t('Invalid email format')
 
       if (Object.values(this.errors).some((error) => error)) {
         return
@@ -71,10 +72,10 @@ export default defineComponent({
         if (error.response?.data?.errors) {
           Object.assign(this.errors, error.response.data.errors)
         } else {
-          this.errors.email = error.response?.data?.message || 'An unexpected error occurred'
+          this.errors.email = error.response?.data?.message || this.$t('An unexpected error occurred')
         }
         Swal.fire({
-          title: 'Error!',
+          title: this.$t('Error!'),
           text: this.errors.email,
           icon: 'error',
           position: 'top-end',
@@ -88,6 +89,12 @@ export default defineComponent({
     },
   },
 })
+
+declare module '@vue/runtime-core' {
+  interface ComponentCustomProperties {
+    $t: VueI18n['t']
+  }
+}
 </script>
 
 <style scoped>

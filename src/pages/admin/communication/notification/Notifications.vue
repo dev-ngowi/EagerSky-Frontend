@@ -1,141 +1,170 @@
 <template>
-  <div class="bg-white shadow-md rounded-lg p-6">
-    <!-- Filters -->
-    <div class="flex flex-wrap items-center mb-4 space-x-4">
-      <div class="w-64">
-        <VaSelect
-          v-model="filters.status"
-          label="Status"
-          placeholder="Select status"
-          :options="statusOptions"
-          clearable
-          @update:modelValue="debouncedFetchNotifications(1)"
-        />
-      </div>
-      <div class="w-64">
-        <VaSelect
-          v-model="filters.user_id"
-          label="User"
-          placeholder="Select user"
-          :options="users"
-          value-by="id"
-          text-by="username"
-          clearable
-          @update:modelValue="debouncedFetchNotifications(1)"
-        />
+  <div class="bg-white shadow-md rounded-lg p-4 sm:p-6">
+    <div class="mb-4 flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
+      <h2 class="text-xl font-semibold text-gray-800">Notifications</h2>
+
+      <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
+        <div class="w-full sm:w-40">
+          <VaSelect
+            v-model="filters.status"
+            label="Filter by Status"
+            :options="statusOptions"
+            value-by="value"
+            text-by="text"
+            clearable
+            @update:modelValue="debouncedFetchNotifications(1)"
+          />
+        </div>
+
+        <div class="w-full sm:w-40">
+          <VaSelect
+            v-model="filters.user_id"
+            label="Filter by User"
+            :options="users"
+            value-by="id"
+            text-by="username"
+            clearable
+            searchable
+            @update:modelValue="debouncedFetchNotifications(1)"
+          />
+        </div>
       </div>
     </div>
 
-    <!-- Main Content -->
+    <VaAlert v-if="errorMessage" color="danger" class="mb-4">
+      {{ errorMessage }}
+    </VaAlert>
+
     <VaDataTable
-      :key="componentKey"
       :items="notifications"
       striped
       :columns="columns"
       :loading="loadingNotifications"
       :per-page="pagination.per_page"
       :current-page="pagination.current_page"
+      
       @update:currentPage="handlePageChange"
     >
       <template #cell(sn)="{ rowIndex }">
         {{ (pagination.current_page - 1) * pagination.per_page + rowIndex + 1 }}
       </template>
+
       <template #cell(user_name)="{ rowData }">
-        {{ rowData.user_name || 'N/A' }}
+        <span class="font-medium text-blue-600">{{ rowData.user_name }}</span>
       </template>
+
       <template #cell(type)="{ rowData }">
-        {{ formatType(rowData.type) }}
+        <VaChip size="small" :color="rowData.type === 'email' ? 'info' : 'warning'">
+          {{ formatType(rowData.type) }}
+        </VaChip>
       </template>
-      <template #cell(message)="{ rowData }">
-        {{ rowData.message || 'N/A' }}
-      </template>
+
       <template #cell(status)="{ rowData }">
-        {{ formatStatus(rowData.status) }}
+        <VaBadge 
+          :color="rowData.status === 'approved' ? 'success' : rowData.status === 'pending' ? 'warning' : 'danger'"
+          text-color="white"
+          class="font-semibold"
+        >
+          {{ formatStatus(rowData.status) }}
+        </VaBadge>
       </template>
+
       <template #cell(created_at)="{ rowData }">
         {{ formatDateTime(rowData.created_at) }}
       </template>
       <template #cell(updated_at)="{ rowData }">
         {{ formatDateTime(rowData.updated_at) }}
       </template>
+
       <template #cell(actions)="{ rowData }">
-        <VaButton
-          size="small"
-          color="primary"
-          icon="visibility"
-          @click="openView(rowData)"
-        />
-        <VaButton
-          v-if="rowData.status === 'pending'"
-          size="small"
-          color="success"
-          icon="check_circle"
-          class="ml-2"
-          @click="confirmApprove(rowData.id)"
-        />
-        <VaButton
-          v-if="rowData.status === 'pending'"
-          size="small"
-          color="danger"
-          icon="cancel"
-          class="ml-2"
-          @click="confirmReject(rowData.id)"
-        />
-        <VaButton
-          size="small"
-          color="danger"
-          icon="delete"
-          class="ml-2"
-          @click="confirmDelete(rowData.id)"
-        />
+        <div class="flex space-x-2">
+          <VaButton preset="secondary" icon="visibility" size="small" @click="openView(rowData)">View</VaButton>
+
+          <VaButton 
+            v-if="rowData.status === 'pending'" 
+            preset="secondary" 
+            color="success" 
+            icon="check" 
+            size="small" 
+            :loading="isLoading"
+            @click="confirmApprove(rowData.id)"
+          >
+            Approve
+          </VaButton>
+
+          <VaButton 
+            v-if="rowData.status === 'pending'" 
+            preset="secondary" 
+            color="warning" 
+            icon="close" 
+            size="small" 
+            :loading="isLoading"
+            @click="confirmReject(rowData.id)"
+          >
+            Reject
+          </VaButton>
+
+          <VaButton 
+            preset="secondary" 
+            color="danger" 
+            icon="delete" 
+            size="small" 
+            :loading="isLoading"
+            @click="confirmDelete(rowData.id)"
+          >
+            Delete
+          </VaButton>
+        </div>
       </template>
     </VaDataTable>
-    <div class="flex justify-between items-center mt-4">
-      <div>
-        Showing {{ (pagination.current_page - 1) * pagination.per_page + 1 }} to
-        {{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} of
-        {{ pagination.total }} notifications
-      </div>
+
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mt-4 space-y-2 sm:space-y-0">
+      <p class="text-sm text-gray-600">
+        Showing 
+        <span class="font-semibold">{{ (pagination.current_page - 1) * pagination.per_page + 1 }}</span>
+        to 
+        <span class="font-semibold">{{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }}</span>
+        of 
+        <span class="font-semibold">{{ pagination.total }}</span> entries
+      </p>
+
       <div class="flex space-x-2">
         <VaButton
           size="small"
-          :disabled="pagination.current_page === 1"
+          :disabled="pagination.current_page === 1 || loadingNotifications"
           @click="handlePageChange(pagination.current_page - 1)"
         >
           Previous
         </VaButton>
         <VaButton
           size="small"
-          :disabled="pagination.current_page === pagination.last_page"
+          :disabled="pagination.current_page >= pagination.last_page || loadingNotifications"
           @click="handlePageChange(pagination.current_page + 1)"
         >
           Next
         </VaButton>
       </div>
     </div>
-    <div v-if="notifications.length === 0 && !loadingNotifications && errorMessage" class="text-center py-4 text-red-500 text-sm">
-      {{ errorMessage }}
-    </div>
-    <div v-else-if="notifications.length === 0 && !loadingNotifications" class="text-center py-4 text-gray-500 text-sm">
-      No notifications found. Try adjusting the filters.
-    </div>
-
-    <!-- View Notification Modal -->
-    <VaModal v-model="showView" size="medium" layout="centered" close-button hide-default-actions class="p-4">
-      <div class="text-lg font-bold mb-4">Notification Details</div>
-      <div v-if="viewNotification" class="space-y-2">
-        <p><strong>User:</strong> {{ viewNotification.user_name || 'N/A' }}</p>
-        <p><strong>Type:</strong> {{ formatType(viewNotification.type) }}</p>
-        <p><strong>Message:</strong> {{ viewNotification.message || 'N/A' }}</p>
-        <p><strong>Status:</strong> {{ formatStatus(viewNotification.status) }}</p>
-        <p><strong>Created At:</strong> {{ formatDateTime(viewNotification.created_at) }}</p>
-        <p><strong>Updated At:</strong> {{ formatDateTime(viewNotification.updated_at) }}</p>
-      </div>
-      <div class="flex justify-end mt-4">
-        <VaButton color="secondary" @click="closeView">Close</VaButton>
-      </div>
-    </VaModal>
   </div>
+
+  <VaModal v-model="showView" title="Notification Details" size="large">
+    <div v-if="viewNotification" class="space-y-3">
+      <p><strong>ID:</strong> {{ viewNotification.id }}</p>
+      <p><strong>User:</strong> {{ viewNotification.user_name }}</p>
+      <p><strong>Type:</strong> <VaChip size="small" :color="viewNotification.type === 'email' ? 'info' : 'warning'">{{ formatType(viewNotification.type) }}</VaChip></p>
+      <p><strong>Status:</strong> <VaBadge :color="viewNotification.status === 'approved' ? 'success' : viewNotification.status === 'pending' ? 'warning' : 'danger'" text-color="white">{{ formatStatus(viewNotification.status) }}</VaBadge></p>
+      <p><strong>Created At:</strong> {{ formatDateTime(viewNotification.created_at) }}</p>
+      <p><strong>Updated At:</strong> {{ formatDateTime(viewNotification.updated_at) }}</p>
+      <div class="bg-gray-100 p-3 rounded-md">
+        <strong>Message:</strong> 
+        <p class="mt-1 whitespace-pre-wrap">{{ viewNotification.message }}</p>
+      </div>
+    </div>
+    <div v-else>Loading...</div>
+    <template #footer>
+      <VaButton @click="closeView">Close</VaButton>
+    </template>
+  </VaModal>
 </template>
 
 <script lang="ts">
@@ -143,7 +172,9 @@ import { defineComponent, ref, reactive, onMounted } from 'vue';
 import { debounce } from 'lodash';
 import Swal from 'sweetalert2';
 import makeRequest from '../../../../services/makeRequest';
+import { VaDataTable, VaButton, VaSelect, VaChip, VaBadge, VaAlert, VaModal } from 'vuestic-ui';
 
+// --- Type Definitions ---
 interface Notification {
   id: number;
   user_name: string;
@@ -157,29 +188,67 @@ interface Notification {
 interface User {
   id: number;
   username: string;
+  first_name?: string;
+  last_name?: string;
 }
+
+interface PaginationState {
+  total: number;
+  per_page: number;
+  current_page: number;
+  last_page: number;
+}
+
+// Assumed type for makeRequest response data structure
+interface ApiResponseData<T> {
+    data?: T[];
+    meta?: {
+        total?: number;
+        per_page?: number;
+        current_page?: number;
+        last_page?: number;
+    };
+    pagination?: { // Fallback for some Laravel API structures
+        total?: number;
+        per_page?: number;
+        current_page?: number;
+        last_page?: number;
+    };
+    message?: string;
+}
+type MakeRequestReturnType = Promise<{ status: number; data: ApiResponseData<any> }>;
+
 
 export default defineComponent({
   name: 'Notifications',
+  components: {
+    VaDataTable, VaButton, VaSelect, VaChip, VaBadge, VaAlert, VaModal
+  },
   setup() {
     const API_BASE_URL = import.meta.env.VITE_APP_API_BASE_URL || 'https://app.eagersky.co.tz';
+    const typedMakeRequest = makeRequest as (config: any) => MakeRequestReturnType;
 
     // State
     const notifications = ref<Notification[]>([]);
     const loadingNotifications = ref<boolean>(false);
     const isLoading = ref<boolean>(false);
     const errorMessage = ref<string>('');
-    const filters = reactive({ status: '', user_id: '' });
-    const pagination = reactive({
+    
+    // Filters state
+    const filters = reactive<{ status: string; user_id: string | number }>({ status: '', user_id: '' }); 
+    
+    // Pagination state
+    const pagination = reactive<PaginationState>({
       total: 0,
       per_page: 10,
       current_page: 1,
       last_page: 1,
     });
+    
     const viewNotification = ref<Notification | null>(null);
     const users = ref<User[]>([]);
     const showView = ref<boolean>(false);
-    const componentKey = ref<number>(0);
+    
 
     // Computed
     const columns = [
@@ -202,38 +271,39 @@ export default defineComponent({
     ]);
 
     // Helper Functions
-    const formatDateTime = (date: string | undefined) => {
-      if (!date) return 'N/A';
-      return new Date(date).toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+    const formatDateTime = (date: string | undefined): string => {
+        if (!date) return 'N/A';
+        return new Date(date).toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
     };
 
-    const formatType = (type: string | undefined) => {
-      if (!type) return 'N/A';
-      return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    const formatType = (type: string | undefined): string => {
+        if (!type) return 'N/A';
+        return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     };
 
-    const formatStatus = (status: string | undefined) => {
-      if (!status) return 'N/A';
-      return status.charAt(0).toUpperCase() + status.slice(1);
+    const formatStatus = (status: string | undefined): string => {
+        if (!status) return 'N/A';
+        return status.charAt(0).toUpperCase() + status.slice(1);
     };
 
     const showToast = (icon: 'success' | 'error', title: string) => {
-      Swal.fire({
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000,
-        timerProgressBar: true,
-        icon,
-        title,
-      });
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true,
+            icon,
+            title,
+        });
     };
+    // End Helper Functions
 
     // API Functions
     const fetchNotifications = async (page: number = 1) => {
@@ -244,9 +314,11 @@ export default defineComponent({
           page: page.toString(),
           per_page: pagination.per_page.toString(),
           ...(filters.status && { status: filters.status }),
-          ...(filters.user_id && { user_id: filters.user_id }),
+          // Ensure user_id is passed as a string if it exists
+          ...(filters.user_id && { user_id: filters.user_id.toString() }),
         }).toString();
-        const response = await makeRequest({
+        
+        const response = await typedMakeRequest({
           method: 'GET',
           url: `${API_BASE_URL}/v1/notifications?${queryParams}`,
           headers: {
@@ -254,23 +326,12 @@ export default defineComponent({
             Accept: 'application/json',
           },
         });
-        console.log('fetchNotifications response:', response);
 
         if (response.status === 200) {
-          let notificationData = response.data.data;
-          if (!Array.isArray(notificationData)) {
-            if (response.data.data && Array.isArray(response.data.data.data)) {
-              notificationData = response.data.data.data;
-            } else if (Array.isArray(response.data)) {
-              notificationData = response.data;
-            } else {
-              console.warn('Unexpected response.data.data format:', response.data);
-              notificationData = [];
-              errorMessage.value = 'Invalid data format received from server';
-            }
-          }
+          const responseData = response.data.data || response.data;
+          let notificationData = Array.isArray(responseData) ? responseData : (responseData.data || []);
 
-          notifications.value = notificationData.map((notif: any) => ({
+          notifications.value = notificationData.map((notif: any): Notification => ({
             id: notif.id,
             user_name: notif.user_name || 'N/A',
             type: notif.type || 'N/A',
@@ -280,15 +341,26 @@ export default defineComponent({
             updated_at: notif.updated_at || '',
           }));
 
-          const paginationData = response.data.pagination || response.data.meta || {};
-          pagination.total = paginationData.total || notificationData.length || 0;
-          pagination.per_page = paginationData.per_page || 10;
-          pagination.current_page = paginationData.current_page || page;
-          pagination.last_page = paginationData.last_page || 1;
+          const meta = response.data.meta || response.data.pagination || {};
+          
+          // FIX: This section updates the reactive pagination state with fresh data
+          pagination.total = meta.total || notifications.value.length || 0;
+          pagination.per_page = meta.per_page || 10;
+          pagination.current_page = meta.current_page || page;
+          pagination.last_page = meta.last_page || (Math.ceil(pagination.total / pagination.per_page) || 1);
+
+          // Handle empty results on a page to move back
+          if (notifications.value.length === 0 && pagination.current_page > 1) {
+              await fetchNotifications(pagination.current_page - 1);
+              return;
+          }
 
           if (notifications.value.length === 0) {
             errorMessage.value = 'No notifications found. Try adjusting the filters.';
+          } else {
+             errorMessage.value = '';
           }
+
         } else {
           errorMessage.value = response.data?.message || 'Failed to fetch notifications';
           showToast('error', errorMessage.value);
@@ -308,7 +380,7 @@ export default defineComponent({
 
     const fetchUsers = async () => {
       try {
-        const response = await makeRequest({
+        const response = await typedMakeRequest({
           method: 'GET',
           url: `${API_BASE_URL}/v1/users`,
           headers: {
@@ -316,149 +388,83 @@ export default defineComponent({
             Accept: 'application/json',
           },
         });
-        console.log('fetchUsers response:', response);
-        users.value = Array.isArray(response.data.data) ? response.data.data : [];
+
+        const userData = Array.isArray(response.data.data) ? response.data.data : [];
+        users.value = userData.map((user: any): User => {
+            const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ');
+            return {
+                id: user.id,
+                username: fullName.trim() || user.username || `User #${user.id}`,
+            };
+        });
       } catch (error: any) {
         console.error('fetchUsers error:', error.response?.data || error.message);
-        showToast('error', 'Failed to fetch users');
+        // Do not show a toast for this, as it's a secondary function
         users.value = [];
+      }
+    };
+    
+    // --- Action Handlers Refactored (Approve/Reject/Delete) ---
+    const handleAction = async (id: number, action: 'approve' | 'reject' | 'delete') => {
+      if (isLoading.value) return;
+      isLoading.value = true;
+      
+      const method = action === 'delete' ? 'DELETE' : 'POST';
+      const urlSegment = action === 'delete' ? '' : `/${action}`;
+      const successMsg = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'deleted';
+      
+      try {
+        const response = await typedMakeRequest({
+          method,
+          url: `${API_BASE_URL}/v1/notifications/${id}${urlSegment}`,
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
+            Accept: 'application/json',
+          },
+        });
+
+        if ([200, 204].includes(response.status)) {
+          showToast('success', response.data?.message || `Notification ${successMsg} successfully`);
+          // Re-fetch the current page to update the table status or remove the row
+          await fetchNotifications(pagination.current_page);
+        } else {
+          showToast('error', response.data?.message || `Failed to ${action} notification`);
+        }
+      } catch (error: any) {
+        console.error(`${action}Notification error:`, error.response?.data || error.message);
+        showToast('error', error.response?.data?.message || `Failed to ${action} notification`);
+      } finally {
+        isLoading.value = false;
       }
     };
 
     const confirmApprove = async (id: number) => {
       const result = await Swal.fire({
-        title: 'Are you sure?',
-        text: 'This notification will be approved and sent to the user!',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Yes, approve it!',
-        cancelButtonText: 'Cancel',
-        position: 'center',
-        toast: false,
+        title: 'Are you sure?', text: 'This notification will be approved and sent to the user!', 
+        icon: 'warning', showCancelButton: true, confirmButtonColor: '#3085d6', cancelButtonColor: '#d33', 
+        confirmButtonText: 'Yes, approve it!', cancelButtonText: 'Cancel', position: 'center', toast: false,
       });
-      if (result.isConfirmed) {
-        await handleApprove(id);
-      }
-    };
-
-    const handleApprove = async (id: number) => {
-      isLoading.value = true;
-      try {
-        const response = await makeRequest({
-          method: 'POST',
-          url: `${API_BASE_URL}/v1/notifications/${id}/approve`,
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
-            Accept: 'application/json',
-          },
-        });
-        console.log('approveNotification response:', response);
-        if (response.status === 200) {
-          showToast('success', response.data.message || 'Notification approved successfully');
-          await fetchNotifications(pagination.current_page);
-          componentKey.value++;
-        } else {
-          showToast('error', response.data?.message || 'Failed to approve notification');
-        }
-      } catch (error: any) {
-        console.error('approveNotification error:', error.response?.data || error.message);
-        showToast('error', error.response?.data?.message || 'Failed to approve notification');
-      } finally {
-        isLoading.value = false;
-      }
+      if (result.isConfirmed) await handleAction(id, 'approve');
     };
 
     const confirmReject = async (id: number) => {
       const result = await Swal.fire({
-        title: 'Are you sure?',
-        text: 'This notification will be rejected!',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Yes, reject it!',
-        cancelButtonText: 'Cancel',
-        position: 'center',
-        toast: false,
+        title: 'Are you sure?', text: 'This notification will be rejected!', 
+        icon: 'warning', showCancelButton: true, confirmButtonColor: '#3085d6', cancelButtonColor: '#d33', 
+        confirmButtonText: 'Yes, reject it!', cancelButtonText: 'Cancel', position: 'center', toast: false,
       });
-      if (result.isConfirmed) {
-        await handleReject(id);
-      }
-    };
-
-    const handleReject = async (id: number) => {
-      isLoading.value = true;
-      try {
-        const response = await makeRequest({
-          method: 'POST',
-          url: `${API_BASE_URL}/v1/notifications/${id}/reject`,
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
-            Accept: 'application/json',
-          },
-        });
-        console.log('rejectNotification response:', response);
-        if (response.status === 200) {
-          showToast('success', response.data.message || 'Notification rejected successfully');
-          await fetchNotifications(pagination.current_page);
-          componentKey.value++;
-        } else {
-          showToast('error', response.data?.message || 'Failed to reject notification');
-        }
-      } catch (error: any) {
-        console.error('rejectNotification error:', error.response?.data || error.message);
-        showToast('error', error.response?.data?.message || 'Failed to reject notification');
-      } finally {
-        isLoading.value = false;
-      }
+      if (result.isConfirmed) await handleAction(id, 'reject');
     };
 
     const confirmDelete = async (id: number) => {
       const result = await Swal.fire({
-        title: 'Are you sure?',
-        text: 'This notification will be deleted permanently!',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, delete it!',
-        cancelButtonText: 'Cancel',
-        position: 'center',
-        toast: false,
+        title: 'Are you sure?', text: 'This notification will be deleted permanently!', 
+        icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', 
+        confirmButtonText: 'Yes, delete it!', cancelButtonText: 'Cancel', position: 'center', toast: false,
       });
-      if (result.isConfirmed) {
-        await handleDelete(id);
-      }
+      if (result.isConfirmed) await handleAction(id, 'delete');
     };
 
-    const handleDelete = async (id: number) => {
-      isLoading.value = true;
-      try {
-        const response = await makeRequest({
-          method: 'DELETE',
-          url: `${API_BASE_URL}/v1/notifications/${id}`,
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}`,
-            Accept: 'application/json',
-          },
-        });
-        console.log('deleteNotification response:', response);
-        if (response.status === 204 || response.status === 200) {
-          showToast('success', response.data.message || 'Notification deleted successfully');
-          await fetchNotifications(pagination.current_page);
-          componentKey.value++;
-        } else {
-          showToast('error', response.data?.message || 'Failed to delete notification');
-        }
-      } catch (error: any) {
-        console.error('deleteNotification error:', error.response?.data || error.message);
-        showToast('error', error.response?.data?.message || 'Failed to delete notification');
-      } finally {
-        isLoading.value = false;
-      }
-    };
 
     const openView = (notification: Notification) => {
       viewNotification.value = { ...notification };
@@ -470,14 +476,16 @@ export default defineComponent({
       showView.value = false;
     };
 
+    // FIX: The core fix for pagination. It takes the *new page number* and fetches data.
     const handlePageChange = async (page: number) => {
-      await fetchNotifications(page);
-      componentKey.value++;
+        if (page < 1 || page > pagination.last_page || loadingNotifications.value) return;
+        await fetchNotifications(page);
     };
 
     // Lifecycle Hooks
     onMounted(async () => {
       await fetchUsers();
+      // Initial data fetch
       await fetchNotifications();
     });
 
@@ -491,90 +499,19 @@ export default defineComponent({
       viewNotification,
       users,
       showView,
-      componentKey,
       columns,
       statusOptions,
       formatDateTime,
       formatType,
       formatStatus,
       debouncedFetchNotifications,
-      fetchUsers,
       confirmApprove,
-      handleApprove,
       confirmReject,
-      handleReject,
       confirmDelete,
-      handleDelete,
       openView,
       closeView,
-      handlePageChange,
+      handlePageChange, 
     };
   },
 });
 </script>
-
-<style scoped>
-.bg-white {
-  background-color: #ffffff;
-}
-.shadow-md {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-.rounded-lg {
-  border-radius: 0.5rem;
-}
-.p-6 {
-  padding: 1.5rem;
-}
-.p-4 {
-  padding: 1rem;
-}
-.mb-4 {
-  margin-bottom: 1rem;
-}
-.mt-4 {
-  margin-top: 1rem;
-}
-.flex {
-  display: flex;
-}
-.flex-wrap {
-  flex-wrap: wrap;
-}
-.justify-between {
-  justify-content: space-between;
-}
-.items-center {
-  align-items: center;
-}
-.space-x-2 > :not(:last-child) {
-  margin-right: 0.5rem;
-}
-.space-x-4 > :not(:last-child) {
-  margin-right: 1rem;
-}
-.space-y-2 > :not(:last-child) {
-  margin-bottom: 0.5rem;
-}
-.w-64 {
-  width: 16rem;
-}
-.ml-2 {
-  margin-left: 0.5rem;
-}
-.text-sm {
-  font-size: 0.875rem;
-}
-.text-red-500 {
-  color: #ef4444;
-}
-.text-gray-500 {
-  color: #6b7280;
-}
-.text-lg {
-  font-size: 1.125rem;
-}
-.font-bold {
-  font-weight: 700;
-}
-</style>
